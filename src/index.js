@@ -1,0 +1,222 @@
+import fetch from 'node-fetch';
+import sqlite3 from 'sqlite3';
+import { open } from 'sqlite';
+
+// Base URL for the API
+const BASE_URL = 'https://dadosabertos.camara.leg.br/api/v2';
+
+// Initialize database connection
+async function initializeDB() {
+    const db = await open({
+        filename: './deputies.db',
+        driver: sqlite3.Database
+    });
+
+    // Create tables if they don't exist
+    await db.exec(`
+        CREATE TABLE IF NOT EXISTS deputies (
+            id INTEGER PRIMARY KEY,
+            name TEXT,
+            party TEXT,
+            state TEXT,
+            legislature INTEGER,
+            photo_url TEXT,
+            email TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS expenses (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            deputy_id INTEGER,
+            year INTEGER,
+            month INTEGER,
+            expense_type TEXT,
+            document_id INTEGER,
+            document_type TEXT,
+            document_date TEXT,
+            document_number TEXT,
+            document_value REAL,
+            document_url TEXT,
+            supplier_name TEXT,
+            supplier_id TEXT,
+            net_value REAL,
+            gloss_value REAL,
+            refund_number TEXT,
+            batch_code INTEGER,
+            installment INTEGER,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(deputy_id, document_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS process_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            deputy_id INTEGER,
+            last_page INTEGER,
+            status TEXT,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+    `);
+
+    return db;
+}
+
+// Fetch all deputies
+async function fetchDeputies(url) {
+    const response = await fetch(url);
+    return await response.json();
+}
+
+// Fetch expenses for a deputy
+async function fetchExpenses(url) {
+    const response = await fetch(url);
+    return await response.json();
+}
+
+// Save deputy to database
+async function saveDeputy(db, deputy) {
+    try {
+        await db.run(`
+            INSERT OR REPLACE INTO deputies (id, name, party, state, legislature, photo_url, email)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        `, [
+            deputy.id,
+            deputy.nome,
+            deputy.siglaPartido,
+            deputy.siglaUf,
+            deputy.idLegislatura,
+            deputy.urlFoto,
+            deputy.email
+        ]);
+    } catch (error) {
+        console.error(`Error saving deputy ${deputy.id}:`, error);
+    }
+}
+
+// Save expense to database
+async function saveExpense(db, deputyId, expense) {
+    try {
+        await db.run(`
+            INSERT OR IGNORE INTO expenses (
+                deputy_id, year, month, expense_type, document_id,
+                document_type, document_date, document_number,
+                document_value, document_url, supplier_name,
+                supplier_id, net_value, gloss_value,
+                refund_number, batch_code, installment
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [
+            deputyId,
+            expense.ano,
+            expense.mes,
+            expense.tipoDespesa,
+            expense.codDocumento,
+            expense.tipoDocumento,
+            expense.dataDocumento,
+            expense.numDocumento,
+            expense.valorDocumento,
+            expense.urlDocumento,
+            expense.nomeFornecedor,
+            expense.cnpjCpfFornecedor,
+            expense.valorLiquido,
+            expense.valorGlosa,
+            expense.numRessarcimento,
+            expense.codLote,
+            expense.parcela
+        ]);
+    } catch (error) {
+        console.error(`Error saving expense for deputy ${deputyId}:`, error);
+    }
+}
+
+// Update process log
+async function updateProcessLog(db, deputyId, lastPage, status) {
+    await db.run(`
+        INSERT OR REPLACE INTO process_log (deputy_id, last_page, status)
+        VALUES (?, ?, ?)
+    `, [deputyId, lastPage, status]);
+}
+
+// Get last processed page for deputy
+async function getLastProcessedPage(db, deputyId) {
+    const row = await db.get(
+        'SELECT last_page FROM process_log WHERE deputy_id = ?',
+        deputyId
+    );
+    return row ? row.last_page : 0;
+}
+
+// Main function
+async function main() {
+    const db = await initializeDB();
+    
+    // Fetch and save all deputies
+    let deputiesUrl = `${BASE_URL}/deputados?idLegislatura=56&itens=1000&ordem=ASC&ordenarPor=nome`;
+    let hasMoreDeputies = true;
+
+    while (hasMoreDeputies) {
+        try {
+            const response = await fetchDeputies(deputiesUrl);
+            
+            // Save deputies
+            for (const deputy of response.dados) {
+                await saveDeputy(db, deputy);
+            }
+
+            // Check for next page
+            const nextLink = response.links.find(link => link.rel === 'next');
+            if (nextLink) {
+                deputiesUrl = nextLink.href;
+            } else {
+                hasMoreDeputies = false;
+            }
+        } catch (error) {
+            console.error('Error fetching deputies:', error);
+            break;
+        }
+    }
+
+    // Fetch expenses for each deputy
+    const deputies = await db.all('SELECT id FROM deputies');
+    
+    for (const deputy of deputies) {
+        let lastProcessedPage = await getLastProcessedPage(db, deputy.id);
+        let expensesUrl = `${BASE_URL}/deputados/${deputy.id}/despesas?idLegislatura=56&itens=1000&ordem=ASC&ordenarPor=ano`;
+        
+        if (lastProcessedPage > 0) {
+            expensesUrl += `&pagina=${lastProcessedPage}`;
+        }
+
+        let currentPage = lastProcessedPage || 1;
+        let hasMoreExpenses = true;
+
+        while (hasMoreExpenses) {
+            try {
+                console.log(`Fetching expenses for deputy ${deputy.id}, page ${currentPage}`);
+                const response = await fetchExpenses(expensesUrl);
+
+                // Save expenses
+                for (const expense of response.dados) {
+                    await saveExpense(db, deputy.id, expense);
+                }
+
+                // Update process log
+                await updateProcessLog(db, deputy.id, currentPage, 'PROCESSED');
+
+                // Check for next page
+                const nextLink = response.links.find(link => link.rel === 'next');
+                if (nextLink) {
+                    expensesUrl = nextLink.href;
+                    currentPage++;
+                } else {
+                    hasMoreExpenses = false;
+                }
+            } catch (error) {
+                console.error(`Error fetching expenses for deputy ${deputy.id}:`, error);
+                break;
+            }
+        }
+    }
+
+    await db.close();
+}
+
+main().catch(console.error); 
