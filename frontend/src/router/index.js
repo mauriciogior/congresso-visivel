@@ -22,10 +22,16 @@ const router = createRouter({
       props: true
     },
     {
-      path: '/deputy/:id',
+      path: '/deputy/:slug',
       component: DeputyProfile,
       props: true,
       name: 'deputy-profile'
+    },
+    {
+      path: '/deputy/:slug/:expenseType',
+      component: DeputyProfile,
+      props: true,
+      name: 'deputy-profile-with-expense-type'
     },
     // Redirect old paths to new structure
     {

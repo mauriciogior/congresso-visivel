@@ -33,7 +33,7 @@ app.get('/api/expense-types', async (req, res) => {
 app.get('/api/deputies', async (req, res) => {
     try {
         const deputies = await db.all(`
-            SELECT id, name, party, state 
+            SELECT id, name, party, state, slug
             FROM deputies 
             ORDER BY name
         `);
@@ -102,6 +102,7 @@ app.get('/api/expenses/analysis', async (req, res) => {
                 de.name,
                 de.party,
                 de.state,
+                d.slug,
                 de.total_spent,
                 de.months_with_expenses,
                 CASE 
@@ -128,7 +129,9 @@ app.get('/api/expenses/analysis', async (req, res) => {
                 END as monthly_absolute_diff,
                 RANK() OVER (ORDER BY de.total_spent DESC) as total_rank,
                 RANK() OVER (ORDER BY (CASE WHEN de.months_with_expenses > 0 THEN de.total_spent / CAST(de.months_with_expenses as float) ELSE 0 END) DESC) as monthly_rank
-            FROM deputy_expenses de, stats s
+            FROM deputy_expenses de
+            JOIN deputies d ON de.id = d.id
+            CROSS JOIN stats s
             ORDER BY total_spent DESC
         `, params);
 
@@ -318,18 +321,47 @@ app.get('/api/expenses/state-analysis', async (req, res) => {
     }
 });
 
-// Get deputy details by ID with expenses
-app.get('/api/deputy/:id', async (req, res) => {
-    const { id } = req.params;
+// Get deputy details by slug or ID with expenses
+app.get('/api/deputy/:slugOrId', async (req, res) => {
+    const { slugOrId } = req.params;
     const { expenseType, year, month } = req.query;
     
     try {
-        // Get deputy details
-        const deputy = await db.get(`
-            SELECT id, name, party, state, photo_url, email 
-            FROM deputies 
-            WHERE id = ?
-        `, [id]);
+        // Check if the parameter is an ID (numeric) or a slug (name-based)
+        const isId = /^\d+$/.test(slugOrId);
+        
+        // Get deputy details based on ID or slug
+        let deputy;
+        if (isId) {
+            deputy = await db.get(`
+                SELECT id, name, party, state, photo_url, email, slug
+                FROM deputies 
+                WHERE id = ?
+            `, [slugOrId]);
+        } else {
+            // Look up by slug - direct match
+            deputy = await db.get(`
+                SELECT id, name, party, state, photo_url, email, slug
+                FROM deputies 
+                WHERE slug = ?
+            `, [slugOrId]);
+            
+            // If not found, try a partial match
+            if (!deputy) {
+                console.log(`Deputy not found with exact slug match: ${slugOrId}, trying partial match`);
+                
+                deputy = await db.get(`
+                    SELECT id, name, party, state, photo_url, email, slug
+                    FROM deputies 
+                    WHERE slug LIKE ?
+                    LIMIT 1
+                `, [`%${slugOrId}%`]);
+                
+                if (deputy) {
+                    console.log(`Found deputy with partial slug match: ${deputy.name} (slug: ${deputy.slug})`);
+                }
+            }
+        }
         
         if (!deputy) {
             return res.status(404).json({ error: 'Deputy not found' });
@@ -337,7 +369,7 @@ app.get('/api/deputy/:id', async (req, res) => {
         
         // Build conditions for expenses query
         const conditions = ['deputy_id = ?'];
-        const params = [id];
+        const params = [deputy.id]; // Use deputy.id from the found deputy object
         
         if (expenseType && expenseType !== 'all') {
             conditions.push('expense_type = ?');
@@ -380,7 +412,7 @@ app.get('/api/deputy/:id', async (req, res) => {
             FROM expenses
             WHERE deputy_id = ?
             ORDER BY year DESC
-        `, [id]);
+        `, [deputy.id]);
         
         // Get available months if a year is selected
         const months = year ? await db.all(`
@@ -388,7 +420,7 @@ app.get('/api/deputy/:id', async (req, res) => {
             FROM expenses
             WHERE deputy_id = ? AND strftime('%Y', document_date) = ?
             ORDER BY month
-        `, [id, year]) : [];
+        `, [deputy.id, year]) : [];
         
         // Get expense types for this deputy
         const types = await db.all(`
@@ -396,7 +428,7 @@ app.get('/api/deputy/:id', async (req, res) => {
             FROM expenses
             WHERE deputy_id = ?
             ORDER BY expense_type
-        `, [id]);
+        `, [deputy.id]);
         
         res.json({
             deputy,

@@ -1,7 +1,8 @@
 <script setup>
 import { ref, computed } from 'vue';
-import { formatCurrency, formatPercentage, getDiffClass } from '@/utils/formatting';
+import { formatCurrency, formatPercentage, getDiffClass, slugify } from '@/utils/formatting';
 import { ChevronUp, ChevronDown } from 'lucide-vue-next';
+import { useRoute } from 'vue-router';
 import { 
   Table, 
   TableHeader, 
@@ -11,6 +12,8 @@ import {
   TableCell, 
   TableCaption 
 } from '../ui/table';
+
+const route = useRoute();
 
 const props = defineProps({
   deputies: {
@@ -241,8 +244,14 @@ const sortedDeputies = computed(() => {
           </TableCell>
           <TableCell>
             <router-link 
-              :to="`/deputy/${deputy.id}`" 
+              :to="{
+                path: `/deputy/${deputy.slug || slugify(deputy.name)}${route.params.expenseType && route.params.expenseType !== 'all' ? `/${route.params.expenseType}` : ''}`,
+                query: {
+                  year: route.query.year || undefined
+                }
+              }" 
               class="text-blue-600 hover:underline"
+              :data-deputy-id="deputy.id"
             >
               {{ deputy.name }}
             </router-link>

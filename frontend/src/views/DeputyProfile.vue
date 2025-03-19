@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { formatCurrency } from '../utils/formatting'
+import { formatCurrency, slugify, toCamelCase } from '../utils/formatting'
 import { ArrowLeft, Search } from 'lucide-vue-next'
 import SpendingGauge from '../components/expense-analysis/SpendingGauge.vue'
 
@@ -48,25 +48,48 @@ const performanceRank = ref(null)
 
 // Form state
 const isLoading = ref(false)
-const selectedExpenseType = ref('all')
-const selectedYear = ref('')
-const selectedMonth = ref('all')
+const selectedExpenseType = ref(route.params.expenseType || 'all')
+const selectedYear = ref(route.query.year || '')
+const selectedMonth = ref(route.query.month || 'all')
 const searchQuery = ref('')
 
 // Sort state
 const sortColumn = ref('document_date')
 const sortDirection = ref('desc')
 
+// Find expense type from a slugified version
+function findExpenseTypeFromSlug(slug) {
+  if (!slug || slug === 'all') return 'all'
+  
+  // If we have filter data, try to match the slug with an actual expense type
+  if (filters.value.expenseTypes && filters.value.expenseTypes.length > 0) {
+    for (const type of filters.value.expenseTypes) {
+      if (slugify(type) === slug) {
+        return type
+      }
+    }
+  }
+  
+  // If we don't have filter data yet or couldn't find a match, keep the slug
+  // and it will be validated after fetching the filter data
+  return slug
+}
+
 // Fetch deputy data
 async function fetchDeputyData() {
   isLoading.value = true
   console.log('Loading started')
-
+  
   try {
     const params = new URLSearchParams()
     
-    if (selectedExpenseType.value && selectedExpenseType.value !== 'all') {
-      params.append('expenseType', selectedExpenseType.value)
+    // Determine the actual expense type to use (from slug if needed)
+    const expenseTypeParam = selectedExpenseType.value && selectedExpenseType.value !== 'all' 
+      ? findExpenseTypeFromSlug(selectedExpenseType.value)
+      : 'all'
+    
+    if (expenseTypeParam !== 'all') {
+      params.append('expenseType', expenseTypeParam)
     }
     
     if (selectedYear.value) {
@@ -80,7 +103,7 @@ async function fetchDeputyData() {
       console.log('Month filter applied:', formattedMonth)
     }
     
-    const requestUrl = `${API_URL}/deputy/${route.params.id}?${params.toString()}`
+    const requestUrl = `${API_URL}/deputy/${route.params.slug}?${params.toString()}`
     console.log('Fetching from:', requestUrl)
     
     const response = await fetch(requestUrl)
@@ -105,15 +128,17 @@ async function fetchDeputyData() {
     // Process the response data
     if (data.deputy) {
       deputy.value = data.deputy
+    } else {
+      // If no deputy found, exit early
+      console.error('No deputy data received from API')
+      isLoading.value = false
+      return false
     }
     
     // Force Vue to detect changes by creating a new array
     if (Array.isArray(data.expenses)) {
-      // Use nextTick to ensure the UI updates
-      setTimeout(() => {
-        console.log(`Setting ${data.expenses.length} expenses`)
-        expenses.value = [...data.expenses]
-      }, 0)
+      expenses.value = [...data.expenses]
+      console.log(`Set ${data.expenses.length} expenses`)
     } else {
       console.warn('No expenses array in response')
       expenses.value = []
@@ -129,12 +154,40 @@ async function fetchDeputyData() {
       filters.value = { years: [], months: [], expenseTypes: [] }
     }
     
-    // Set default year if not already set
+    // Set default year if not already set from URL params
     if (!selectedYear.value && filters.value.years.length > 0) {
       selectedYear.value = filters.value.years[0]
+      updateUrlParams() // Update URL with the default year
     }
+    
+    // Try to match the expense type from slug if needed
+    if (selectedExpenseType.value !== 'all') {
+      // First check if it's already an exact match
+      if (!filters.value.expenseTypes.includes(selectedExpenseType.value)) {
+        // If not an exact match, try to find by slug
+        let found = false
+        for (const type of filters.value.expenseTypes) {
+          if (slugify(type) === selectedExpenseType.value) {
+            // Found the match, update the selectedExpenseType to the actual type
+            selectedExpenseType.value = type
+            found = true
+            break
+          }
+        }
+        
+        // If no match found, reset to all
+        if (!found) {
+          selectedExpenseType.value = 'all'
+          updateUrlParams()
+        }
+      }
+    }
+    
+    console.log('Deputy data successfully loaded')
+    return true
   } catch (error) {
     console.error('Error fetching deputy data:', error)
+    return false
   } finally {
     console.log('Loading finished, setting isLoading to false')
     isLoading.value = false
@@ -218,13 +271,48 @@ function toggleSort(column) {
 
 // Functions for filter buttons removed as they're redundant
 
+// Update URL with current filters
+function updateUrlParams() {
+  const query = {}
+  
+  // Update query parameters for year and month
+  if (selectedYear.value) {
+    query.year = selectedYear.value
+  }
+  
+  if (selectedMonth.value && selectedMonth.value !== 'all') {
+    query.month = selectedMonth.value
+  }
+  
+  // Create the path with the expense type
+  const basePathParts = route.path.split('/')
+  const deputySlug = basePathParts[2] // Get the deputy slug from the URL
+  
+  let path = `/deputy/${deputySlug}`
+  if (selectedExpenseType.value && selectedExpenseType.value !== 'all') {
+    // Use slugify to create a URL-friendly version of the expense type
+    const expenseTypeSlug = slugify(selectedExpenseType.value)
+    path += `/${expenseTypeSlug}`
+  }
+  
+  // Update URL without reloading the page
+  router.replace({
+    path,
+    query
+  })
+}
+
 // Reset monthly filter when year changes
-watch(selectedYear, (newYear) => {
+watch(selectedYear, async (newYear) => {
   if (newYear) {
     selectedMonth.value = 'all'
-    fetchDeputyData()
-    // Update performance ranking when year changes
-    fetchRankingData()
+    updateUrlParams()
+    const success = await fetchDeputyData()
+    
+    // Only update performance ranking if deputy data was loaded successfully
+    if (success && deputy.value) {
+      fetchRankingData()
+    }
   }
 })
 
@@ -233,18 +321,28 @@ watch(selectedMonth, (newMonth) => {
   // Only fetch if we have a year and the month is valid
   if (selectedYear.value) {
     console.log('Month changed to:', newMonth)
+    updateUrlParams()
     fetchDeputyData()
   }
 })
 
 // Add expense type watcher
 watch(selectedExpenseType, () => {
+  updateUrlParams()
   fetchDeputyData()
 })
 
 // Fetch overall ranking data for the performance indicator
 async function fetchRankingData() {
   try {
+    // Make sure we have the deputy loaded
+    if (!deputy.value || !deputy.value.id) {
+      console.error('Cannot fetch ranking data: deputy not loaded yet');
+      return false;
+    }
+    
+    console.log(`Fetching ranking data for deputy ID: ${deputy.value.id}`);
+    
     // Use year param if we have it
     const yearParam = selectedYear.value ? `?year=${selectedYear.value}` : '';
     
@@ -255,32 +353,36 @@ async function fetchRankingData() {
     const data = await response.json();
     console.log(`Fetched ${data.length} deputies for ranking`);
     
-    // Only process if we have deputy data
-    if (data.length > 0 && deputy.value) {
-      // Find this deputy in the overall ranking
-      const currentDeputy = data.find(d => d.id === Number(route.params.id));
+    // Only process if we have data
+    if (data.length > 0) {
+      // Find this deputy in the overall ranking by ID
+      const currentDeputy = data.find(d => d.id === Number(deputy.value.id));
       
       if (currentDeputy) {
         console.log('Found current deputy in ranking data:', currentDeputy.name);
         
-        // We'll leave the detailed analysis to the compute function
-        console.log(`Calculating ranking for ${currentDeputy.name} among ${data.length} deputies...`);
-        
         // Calculate performance metrics
         computePerformanceRank(currentDeputy, data);
+        return true;
       } else {
-        console.error(`Deputy with ID ${route.params.id} not found in ranking data`);
+        console.error(`Deputy with ID ${deputy.value.id} not found in ranking data`);
       }
     }
+    
+    return false;
   } catch (error) {
     console.error('Error fetching ranking data:', error);
+    return false;
   }
 }
 
 // Initial data fetch
-onMounted(() => {
-  fetchDeputyData()
-  fetchRankingData()
+onMounted(async () => {
+  await fetchDeputyData()
+  // Only fetch ranking data after deputy data is loaded
+  if (deputy.value) {
+    fetchRankingData()
+  }
 })
 
 // Format date helper
@@ -296,7 +398,18 @@ function formatDate(dateString) {
 
 // Navigate back
 function goBack() {
-  router.back()
+  // Return to expenses deputy view with appropriate filter
+  let expenseTypePath = '';
+  if (selectedExpenseType.value && selectedExpenseType.value !== 'all') {
+    expenseTypePath = `/${slugify(selectedExpenseType.value)}`;
+  }
+  
+  router.push({
+    path: `/expenses/deputies${expenseTypePath}`,
+    query: {
+      year: selectedYear.value || undefined
+    }
+  })
 }
 
 // Total expenditure for current filter
