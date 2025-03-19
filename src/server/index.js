@@ -399,6 +399,7 @@ app.get('/api/deputy/:slugOrId', async (req, res) => {
                 net_value,
                 supplier_name,
                 supplier_id,
+                document_url,
                 strftime('%Y', document_date) as year,
                 strftime('%m', document_date) as month
             FROM expenses

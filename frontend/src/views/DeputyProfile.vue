@@ -396,6 +396,23 @@ function formatDate(dateString) {
   }).format(date)
 }
 
+// Format CNPJ (supplier_id) with the mask 00.000.000/0000-00
+function formatCNPJ(cnpj) {
+  if (!cnpj) return ''
+  
+  // Remove any non-digit characters
+  const digits = cnpj.replace(/\D/g, '')
+  
+  // Pad with leading zeros if needed
+  const paddedDigits = digits.padStart(14, '0')
+  
+  // Apply mask: 00.000.000/0000-00
+  return paddedDigits.replace(
+    /^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/,
+    '$1.$2.$3/$4-$5'
+  )
+}
+
 // Navigate back
 function goBack() {
   // Return to expenses deputy view with appropriate filter
@@ -818,10 +835,32 @@ function getMonthName(month) {
                   <TableRow v-for="expense in filteredExpenses" :key="expense.id">
                     <TableCell>{{ formatDate(expense.document_date) }}</TableCell>
                     <TableCell>{{ formatExpenseType(expense.expense_type) }}</TableCell>
-                    <TableCell>{{ expense.supplier_name || '-' }}</TableCell>
+                    <TableCell>
+                      <div>{{ expense.supplier_name || '-' }}</div>
+                      <div v-if="expense.supplier_id" class="text-xs text-gray-500">
+                        {{ formatCNPJ(expense.supplier_id) }}
+                      </div>
+                    </TableCell>
                     <TableCell>
                       <div class="text-sm">
-                        <div>{{ expense.document_type || '-' }}</div>
+                        <div>
+                          <template v-if="expense.document_url">
+                            <a 
+                              :href="expense.document_url" 
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              class="text-blue-600 hover:underline hover:text-blue-800 flex items-center"
+                            >
+                              {{ expense.document_type || 'Ver documento' }}
+                              <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                              </svg>
+                            </a>
+                          </template>
+                          <template v-else>
+                            {{ expense.document_type || '-' }}
+                          </template>
+                        </div>
                         <div v-if="expense.document_number" class="text-gray-500">
                           {{ expense.document_number }}
                         </div>
