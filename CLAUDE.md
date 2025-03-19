@@ -60,7 +60,10 @@ This project is a web application that analyzes and displays expense data from B
   - Card (CardHeader, CardTitle, CardContent)
   - Table (Table, TableHeader, TableHead, TableBody, TableRow, TableCell, TableCaption)
   - Input
+  - Select (Select, SelectTrigger, SelectValue, SelectContent, SelectGroup, SelectItem, SelectLabel)
   - Tabs (Tabs, TabsList, TabsTrigger)
+- Style customizations:
+  - Custom CSS overrides in style.css for better form control visibility
 - Custom utility functions for formatting and data display
 
 ## Commands

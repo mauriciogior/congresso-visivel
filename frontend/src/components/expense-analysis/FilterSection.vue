@@ -4,6 +4,16 @@ import Card from '../ui/card/Card.vue';
 import CardHeader from '../ui/card/CardHeader.vue';
 import CardTitle from '../ui/card/CardTitle.vue';
 import CardContent from '../ui/card/CardContent.vue';
+import Input from '../ui/input/Input.vue';
+import { 
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel
+} from '../ui/select';
 import { toCamelCase } from '@/utils/formatting';
 
 const props = defineProps({
@@ -63,59 +73,80 @@ const emit = defineEmits([
       <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div class="space-y-2">
           <label class="text-sm font-medium">Tipo de Despesa</label>
-          <select 
-            :value="selectedExpenseType"
-            @input="emit('update:selectedExpenseType', $event.target.value)"
-            class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-white text-gray-900"
+          <Select 
+            :model-value="selectedExpenseType"
+            @update:model-value="emit('update:selectedExpenseType', $event)"
           >
-            <option value="">Selecione um tipo de despesa</option>
-            <option value="all">Todas as despesas</option>
-            <option v-for="type in expenseTypes" :key="type.expense_type" :value="type.expense_type">
-              {{ toCamelCase(type.expense_type) }}
-            </option>
-          </select>
+            <SelectTrigger class="w-full">
+              <SelectValue placeholder="Selecione um tipo de despesa" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                <SelectLabel>Tipos de Despesa</SelectLabel>
+                <SelectItem value="all">Todas as despesas</SelectItem>
+                <SelectItem 
+                  v-for="type in expenseTypes" 
+                  :key="type.expense_type" 
+                  :value="type.expense_type"
+                >
+                  {{ toCamelCase(type.expense_type) }}
+                </SelectItem>
+              </SelectGroup>
+            </SelectContent>
+          </Select>
         </div>
 
         <div class="space-y-2">
           <label class="text-sm font-medium">Ano</label>
-          <select 
-            :value="selectedYear"
-            @input="emit('update:selectedYear', parseInt($event.target.value))"
-            class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-white text-gray-900"
+          <Select 
+            :model-value="selectedYear.toString()"
+            @update:model-value="emit('update:selectedYear', parseInt($event))"
           >
-            <option v-for="year in availableYears" :key="year" :value="year">
-              {{ year }}
-            </option>
-          </select>
+            <SelectTrigger class="w-full">
+              <SelectValue placeholder="Selecione um ano" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                <SelectLabel>Anos Disponíveis</SelectLabel>
+                <SelectItem 
+                  v-for="year in availableYears" 
+                  :key="year" 
+                  :value="year.toString()"
+                >
+                  {{ year }}
+                </SelectItem>
+              </SelectGroup>
+            </SelectContent>
+          </Select>
         </div>
         
         <div v-if="currentView === 'deputies'" class="space-y-2">
           <label class="text-sm font-medium">Buscar Deputado</label>
-          <input 
-            :value="searchQuery"
-            @input="emit('update:searchQuery', $event.target.value)"
+          <Input 
+            :model-value="searchQuery"
+            @update:model-value="emit('update:searchQuery', $event)"
             placeholder="Buscar por nome..."
-            class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-white text-gray-900"
+            class="w-full"
           />
         </div>
 
         <div v-else-if="currentView === 'parties'" class="space-y-2">
           <label class="text-sm font-medium">Buscar Partido</label>
-          <input 
-            :value="partySearchQuery"
-            @input="emit('update:partySearchQuery', $event.target.value)"
+          <Input 
+            :model-value="partySearchQuery"
+            @update:model-value="emit('update:partySearchQuery', $event)"
             placeholder="Buscar por partido..."
-            class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-white text-gray-900"
+            class="w-full"
           />
         </div>
 
         <div v-else class="space-y-2">
           <label class="text-sm font-medium">Buscar Estado</label>
-          <input 
-            :value="stateSearchQuery"
-            @input="emit('update:stateSearchQuery', $event.target.value)"
+          <Input 
+            :model-value="stateSearchQuery"
+            @update:model-value="emit('update:stateSearchQuery', $event)"
             placeholder="Buscar por estado..."
-            class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-white text-gray-900"
+            class="w-full"
           />
         </div>
       </div>
