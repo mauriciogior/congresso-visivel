@@ -1,5 +1,7 @@
 <script setup>
+import { ref, computed } from 'vue';
 import { formatCurrency, formatPercentage } from '@/utils/formatting';
+import { ChevronUp, ChevronDown } from 'lucide-vue-next';
 import { 
   Table, 
   TableHeader, 
@@ -25,6 +27,79 @@ const props = defineProps({
     default: ''
   }
 });
+
+// Sorting
+const sortColumn = ref('');
+const sortDirection = ref('asc');
+
+const toggleSort = (column) => {
+  if (sortColumn.value === column) {
+    // Toggle direction if same column
+    sortDirection.value = sortDirection.value === 'asc' ? 'desc' : 'asc';
+  } else {
+    // New column, default to ascending
+    sortColumn.value = column;
+    sortDirection.value = 'asc';
+  }
+};
+
+const getSortIcon = (column) => {
+  if (sortColumn.value !== column) return null;
+  return sortDirection.value === 'asc' ? ChevronUp : ChevronDown;
+};
+
+const sortedParties = computed(() => {
+  if (!props.parties.length || !sortColumn.value) return props.parties;
+  
+  return [...props.parties].sort((a, b) => {
+    let valueA, valueB;
+    
+    // Extract the values based on the sort column
+    switch (sortColumn.value) {
+      case 'rank':
+        valueA = a.rank;
+        valueB = b.rank;
+        break;
+      case 'party':
+        valueA = a.party;
+        valueB = b.party;
+        break;
+      case 'count':
+        valueA = a.deputy_count;
+        valueB = b.deputy_count;
+        break;
+      case 'total':
+        valueA = a.total_spent;
+        valueB = b.total_spent;
+        break;
+      case 'avg':
+        valueA = a.avg_per_deputy;
+        valueB = b.avg_per_deputy;
+        break;
+      case 'diff':
+        valueA = a.absolute_diff;
+        valueB = b.absolute_diff;
+        break;
+      case 'percent':
+        valueA = a.percentage_diff;
+        valueB = b.percentage_diff;
+        break;
+      default:
+        return 0;
+    }
+    
+    // Sort comparison
+    if (typeof valueA === 'string' && typeof valueB === 'string') {
+      return sortDirection.value === 'asc' 
+        ? valueA.localeCompare(valueB)
+        : valueB.localeCompare(valueA);
+    } else {
+      return sortDirection.value === 'asc' 
+        ? valueA - valueB
+        : valueB - valueA;
+    }
+  });
+});
 </script>
 
 <template>
@@ -33,13 +108,69 @@ const props = defineProps({
       <TableCaption>Lista de gastos por partido</TableCaption>
       <TableHeader>
         <TableRow>
-          <TableHead>Posição</TableHead>
-          <TableHead>Partido</TableHead>
-          <TableHead>Deputados</TableHead>
-          <TableHead>Total Gasto</TableHead>
-          <TableHead>Média por Deputado</TableHead>
-          <TableHead>Diferença da Média</TableHead>
-          <TableHead>% da Média</TableHead>
+          <TableHead 
+            @click="toggleSort('rank')" 
+            class="cursor-pointer hover:bg-gray-50"
+          >
+            <div class="flex items-center">
+              Posição
+              <component :is="getSortIcon('rank')" class="ml-1 h-4 w-4" v-if="sortColumn === 'rank'" />
+            </div>
+          </TableHead>
+          <TableHead 
+            @click="toggleSort('party')" 
+            class="cursor-pointer hover:bg-gray-50"
+          >
+            <div class="flex items-center">
+              Partido
+              <component :is="getSortIcon('party')" class="ml-1 h-4 w-4" v-if="sortColumn === 'party'" />
+            </div>
+          </TableHead>
+          <TableHead 
+            @click="toggleSort('count')" 
+            class="cursor-pointer hover:bg-gray-50"
+          >
+            <div class="flex items-center">
+              Deputados
+              <component :is="getSortIcon('count')" class="ml-1 h-4 w-4" v-if="sortColumn === 'count'" />
+            </div>
+          </TableHead>
+          <TableHead 
+            @click="toggleSort('total')" 
+            class="cursor-pointer hover:bg-gray-50"
+          >
+            <div class="flex items-center">
+              Total Gasto
+              <component :is="getSortIcon('total')" class="ml-1 h-4 w-4" v-if="sortColumn === 'total'" />
+            </div>
+          </TableHead>
+          <TableHead 
+            @click="toggleSort('avg')" 
+            class="cursor-pointer hover:bg-gray-50"
+          >
+            <div class="flex items-center">
+              Média por Deputado
+              <component :is="getSortIcon('avg')" class="ml-1 h-4 w-4" v-if="sortColumn === 'avg'" />
+            </div>
+          </TableHead>
+          <TableHead 
+            @click="toggleSort('diff')" 
+            class="cursor-pointer hover:bg-gray-50"
+          >
+            <div class="flex items-center">
+              Diferença da Média
+              <component :is="getSortIcon('diff')" class="ml-1 h-4 w-4" v-if="sortColumn === 'diff'" />
+            </div>
+          </TableHead>
+          <TableHead 
+            @click="toggleSort('percent')" 
+            class="cursor-pointer hover:bg-gray-50"
+          >
+            <div class="flex items-center">
+              % da Média
+              <component :is="getSortIcon('percent')" class="ml-1 h-4 w-4" v-if="sortColumn === 'percent'" />
+            </div>
+          </TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -66,7 +197,7 @@ const props = defineProps({
         <!-- Data rows -->
         <TableRow 
           v-else
-          v-for="party in parties" 
+          v-for="party in sortedParties" 
           :key="party.party"
           :class="{'bg-yellow-50': searchQuery && party.party.toLowerCase().includes(searchQuery.toLowerCase())}"
         >

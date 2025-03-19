@@ -1,6 +1,7 @@
 <script setup>
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import { formatCurrency, formatPercentage, getDiffClass } from '@/utils/formatting';
+import { ChevronUp, ChevronDown } from 'lucide-vue-next';
 import { 
   Table, 
   TableHeader, 
@@ -27,6 +28,79 @@ const props = defineProps({
 });
 
 const emit = defineEmits(['update:deputyMetric']);
+
+// Sorting
+const sortColumn = ref('');
+const sortDirection = ref('asc');
+
+const toggleSort = (column) => {
+  if (sortColumn.value === column) {
+    // Toggle direction if same column
+    sortDirection.value = sortDirection.value === 'asc' ? 'desc' : 'asc';
+  } else {
+    // New column, default to ascending
+    sortColumn.value = column;
+    sortDirection.value = 'asc';
+  }
+};
+
+const getSortIcon = (column) => {
+  if (sortColumn.value !== column) return null;
+  return sortDirection.value === 'asc' ? ChevronUp : ChevronDown;
+};
+
+const sortedDeputies = computed(() => {
+  if (!props.deputies.length || !sortColumn.value) return props.deputies;
+  
+  return [...props.deputies].sort((a, b) => {
+    let valueA, valueB;
+    
+    // Extract the values based on the sort column
+    switch (sortColumn.value) {
+      case 'position':
+        valueA = props.deputyMetric === 'total' ? a.total_rank : a.monthly_rank;
+        valueB = props.deputyMetric === 'total' ? b.total_rank : b.monthly_rank;
+        break;
+      case 'name':
+        valueA = a.name;
+        valueB = b.name;
+        break;
+      case 'party':
+        valueA = a.party;
+        valueB = b.party;
+        break;
+      case 'value':
+        valueA = props.deputyMetric === 'total' ? a.total_spent : a.monthly_average;
+        valueB = props.deputyMetric === 'total' ? b.total_spent : b.monthly_average;
+        break;
+      case 'months':
+        valueA = a.months_with_expenses;
+        valueB = b.months_with_expenses;
+        break;
+      case 'diff':
+        valueA = props.deputyMetric === 'total' ? a.total_absolute_diff : a.monthly_absolute_diff;
+        valueB = props.deputyMetric === 'total' ? b.total_absolute_diff : b.monthly_absolute_diff;
+        break;
+      case 'percent':
+        valueA = props.deputyMetric === 'total' ? a.total_percentage_diff : a.monthly_percentage_diff;
+        valueB = props.deputyMetric === 'total' ? b.total_percentage_diff : b.monthly_percentage_diff;
+        break;
+      default:
+        return 0;
+    }
+    
+    // Sort comparison
+    if (typeof valueA === 'string' && typeof valueB === 'string') {
+      return sortDirection.value === 'asc' 
+        ? valueA.localeCompare(valueB)
+        : valueB.localeCompare(valueA);
+    } else {
+      return sortDirection.value === 'asc' 
+        ? valueA - valueB
+        : valueB - valueA;
+    }
+  });
+});
 </script>
 
 <template>
@@ -74,13 +148,69 @@ const emit = defineEmits(['update:deputyMetric']);
       <TableCaption>Lista de gastos por deputado</TableCaption>
       <TableHeader>
         <TableRow>
-          <TableHead>Posição</TableHead>
-          <TableHead>Deputado</TableHead>
-          <TableHead>Partido/Estado</TableHead>
-          <TableHead>{{ deputyMetric === 'total' ? 'Total Gasto' : 'Média Mensal' }}</TableHead>
-          <TableHead>Meses Ativos</TableHead>
-          <TableHead>Diferença da Média</TableHead>
-          <TableHead>% da Média</TableHead>
+          <TableHead 
+            @click="toggleSort('position')" 
+            class="cursor-pointer hover:bg-gray-50"
+          >
+            <div class="flex items-center">
+              Posição
+              <component :is="getSortIcon('position')" class="ml-1 h-4 w-4" v-if="sortColumn === 'position'" />
+            </div>
+          </TableHead>
+          <TableHead 
+            @click="toggleSort('name')" 
+            class="cursor-pointer hover:bg-gray-50"
+          >
+            <div class="flex items-center">
+              Deputado
+              <component :is="getSortIcon('name')" class="ml-1 h-4 w-4" v-if="sortColumn === 'name'" />
+            </div>
+          </TableHead>
+          <TableHead 
+            @click="toggleSort('party')" 
+            class="cursor-pointer hover:bg-gray-50"
+          >
+            <div class="flex items-center">
+              Partido/Estado
+              <component :is="getSortIcon('party')" class="ml-1 h-4 w-4" v-if="sortColumn === 'party'" />
+            </div>
+          </TableHead>
+          <TableHead 
+            @click="toggleSort('value')" 
+            class="cursor-pointer hover:bg-gray-50"
+          >
+            <div class="flex items-center">
+              {{ deputyMetric === 'total' ? 'Total Gasto' : 'Média Mensal' }}
+              <component :is="getSortIcon('value')" class="ml-1 h-4 w-4" v-if="sortColumn === 'value'" />
+            </div>
+          </TableHead>
+          <TableHead 
+            @click="toggleSort('months')" 
+            class="cursor-pointer hover:bg-gray-50"
+          >
+            <div class="flex items-center">
+              Meses Ativos
+              <component :is="getSortIcon('months')" class="ml-1 h-4 w-4" v-if="sortColumn === 'months'" />
+            </div>
+          </TableHead>
+          <TableHead 
+            @click="toggleSort('diff')" 
+            class="cursor-pointer hover:bg-gray-50"
+          >
+            <div class="flex items-center">
+              Diferença da Média
+              <component :is="getSortIcon('diff')" class="ml-1 h-4 w-4" v-if="sortColumn === 'diff'" />
+            </div>
+          </TableHead>
+          <TableHead 
+            @click="toggleSort('percent')" 
+            class="cursor-pointer hover:bg-gray-50"
+          >
+            <div class="flex items-center">
+              % da Média
+              <component :is="getSortIcon('percent')" class="ml-1 h-4 w-4" v-if="sortColumn === 'percent'" />
+            </div>
+          </TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -105,7 +235,7 @@ const emit = defineEmits(['update:deputyMetric']);
         </TableRow>
         
         <!-- Data rows -->
-        <TableRow v-else v-for="deputy in deputies" :key="deputy.id">
+        <TableRow v-else v-for="deputy in sortedDeputies" :key="deputy.id">
           <TableCell class="font-medium">
             {{ deputyMetric === 'total' ? deputy.total_rank : deputy.monthly_rank }}
           </TableCell>

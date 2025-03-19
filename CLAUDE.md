@@ -43,6 +43,7 @@ This project is a web application that analyzes and displays expense data from B
   - By State
 - Filters by expense type and year
 - Search functionality for each view
+- Sortable tables with column headers that can be clicked to sort data
 
 ### Component Organization
 - `ExpenseAnalysis.vue`: Main container component
