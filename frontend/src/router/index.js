@@ -1,6 +1,9 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import ExpenseAnalysis from '../views/ExpenseAnalysis.vue'
 
+// Lazy load DeputyProfile component
+const DeputyProfile = () => import('../views/DeputyProfile.vue')
+
 const router = createRouter({
   history: createWebHistory(),
   routes: [
@@ -17,6 +20,12 @@ const router = createRouter({
       path: '/expenses/:view/:expenseType',
       component: ExpenseAnalysis,
       props: true
+    },
+    {
+      path: '/deputy/:id',
+      component: DeputyProfile,
+      props: true,
+      name: 'deputy-profile'
     },
     // Redirect old paths to new structure
     {

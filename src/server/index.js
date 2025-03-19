@@ -318,6 +318,101 @@ app.get('/api/expenses/state-analysis', async (req, res) => {
     }
 });
 
+// Get deputy details by ID with expenses
+app.get('/api/deputy/:id', async (req, res) => {
+    const { id } = req.params;
+    const { expenseType, year, month } = req.query;
+    
+    try {
+        // Get deputy details
+        const deputy = await db.get(`
+            SELECT id, name, party, state, photo_url, email 
+            FROM deputies 
+            WHERE id = ?
+        `, [id]);
+        
+        if (!deputy) {
+            return res.status(404).json({ error: 'Deputy not found' });
+        }
+        
+        // Build conditions for expenses query
+        const conditions = ['deputy_id = ?'];
+        const params = [id];
+        
+        if (expenseType && expenseType !== 'all') {
+            conditions.push('expense_type = ?');
+            params.push(expenseType);
+        }
+        
+        if (year) {
+            conditions.push("strftime('%Y', document_date) = ?");
+            params.push(year);
+        }
+        
+        if (month) {
+            conditions.push("strftime('%m', document_date) = ?");
+            params.push(month.padStart(2, '0')); // Ensure month is 2 digits
+        }
+        
+        // Get expense summary by type and date
+        const expenses = await db.all(`
+            SELECT 
+                id,
+                expense_type,
+                document_id,
+                document_type,
+                document_date,
+                document_number,
+                document_value,
+                net_value,
+                supplier_name,
+                supplier_id,
+                strftime('%Y', document_date) as year,
+                strftime('%m', document_date) as month
+            FROM expenses
+            WHERE ${conditions.join(' AND ')}
+            ORDER BY document_date DESC
+        `, params);
+        
+        // Get available years for this deputy
+        const years = await db.all(`
+            SELECT DISTINCT strftime('%Y', document_date) as year
+            FROM expenses
+            WHERE deputy_id = ?
+            ORDER BY year DESC
+        `, [id]);
+        
+        // Get available months if a year is selected
+        const months = year ? await db.all(`
+            SELECT DISTINCT strftime('%m', document_date) as month
+            FROM expenses
+            WHERE deputy_id = ? AND strftime('%Y', document_date) = ?
+            ORDER BY month
+        `, [id, year]) : [];
+        
+        // Get expense types for this deputy
+        const types = await db.all(`
+            SELECT DISTINCT expense_type
+            FROM expenses
+            WHERE deputy_id = ?
+            ORDER BY expense_type
+        `, [id]);
+        
+        res.json({
+            deputy,
+            expenses,
+            filters: {
+                years: years.map(y => y.year),
+                months: months.map(m => m.month),
+                expenseTypes: types.map(t => t.expense_type)
+            }
+        });
+    } catch (error) {
+        console.error('Error fetching deputy details:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 const PORT = process.env.PORT || 3002;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);

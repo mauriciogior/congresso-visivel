@@ -239,7 +239,14 @@ const sortedDeputies = computed(() => {
           <TableCell class="font-medium">
             #{{ deputyMetric === 'total' ? deputy.total_rank : deputy.monthly_rank }}
           </TableCell>
-          <TableCell>{{ deputy.name }}</TableCell>
+          <TableCell>
+            <router-link 
+              :to="`/deputy/${deputy.id}`" 
+              class="text-blue-600 hover:underline"
+            >
+              {{ deputy.name }}
+            </router-link>
+          </TableCell>
           <TableCell class="text-gray-500">{{ deputy.party }}/{{ deputy.state }}</TableCell>
           <TableCell>
             {{ formatCurrency(deputyMetric === 'total' ? deputy.total_spent : deputy.monthly_average) }}
