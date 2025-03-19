@@ -24,8 +24,9 @@ This project is a web application that analyzes and displays expense data from B
   - `/api/expenses/analysis` - Analyze expenses by deputy
   - `/api/expenses/party-analysis` - Analyze expenses by party
   - `/api/expenses/state-analysis` - Analyze expenses by state
-- Properly handles cases where deputies, parties, or states have no expenses for specific types or years
-  - Returns zero values rather than omitting the items
+- Properly handles cases where deputies, parties, or states have no expenses for specific types
+  - Returns zero values for specific expense types if deputy was active that year
+  - Only includes deputies who were active in the selected year (had any expenses)
   - Calculates proper differences from average values
 - Runs on port 3002 by default
 

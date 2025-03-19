@@ -71,17 +71,25 @@ app.get('/api/expenses/analysis', async (req, res) => {
                 FROM expenses e
                 WHERE 1=1 ${whereClause ? whereClause.replace('WHERE ', ' AND ') : ''}
             ),
+            /* First, identify deputies who have ANY expenses in the selected year */
+            active_deputies AS (
+                SELECT DISTINCT e.deputy_id, d.party, d.state
+                FROM expenses e
+                JOIN deputies d ON e.deputy_id = d.id
+                WHERE ${year ? `strftime('%Y', e.document_date) = '${year}'` : '1=1'}
+            ),
             deputy_expenses AS (
                 SELECT 
-                    d.id,
+                    ad.deputy_id as id,
                     d.name,
-                    d.party,
-                    d.state,
+                    ad.party,
+                    ad.state,
                     COALESCE(SUM(fe.net_value), 0) as total_spent,
                     COALESCE(COUNT(DISTINCT strftime('%Y-%m', fe.document_date)), 0) as months_with_expenses
-                FROM deputies d
-                LEFT JOIN filtered_expenses fe ON d.id = fe.deputy_id
-                GROUP BY d.id, d.name, d.party, d.state
+                FROM active_deputies ad
+                JOIN deputies d ON ad.deputy_id = d.id
+                LEFT JOIN filtered_expenses fe ON ad.deputy_id = fe.deputy_id
+                GROUP BY ad.deputy_id, d.name, ad.party, ad.state
             ),
             stats AS (
                 SELECT 
@@ -135,44 +143,58 @@ app.get('/api/expenses/party-analysis', async (req, res) => {
     const { expenseType, year } = req.query;
     
     try {
-        const conditions = ['d.party IS NOT NULL'];
         const params = [];
+        let expenseFilter = '';
         
+        // Build filter conditions
         if (expenseType !== 'all') {
-            conditions.push('e.expense_type = ?');
+            expenseFilter = 'AND e.expense_type = ?';
             params.push(expenseType);
         }
-        if (year) {
-            conditions.push("strftime('%Y', e.document_date) = ?");
-            params.push(year);
-        }
+
+        // Year filter will be applied directly in the SQL
+        const yearParam = year || null;
         
-        const whereClause = 'WHERE ' + conditions.join(' AND ');
-        
-        const analysis = await db.all(`
-            WITH filtered_expenses AS (
+        // Create the query with cleaner structure
+        const query = `
+            WITH active_deputies AS (
+                -- Get active deputies for the selected year with their party
+                SELECT DISTINCT e.deputy_id, d.party
+                FROM expenses e
+                JOIN deputies d ON e.deputy_id = d.id
+                WHERE d.party IS NOT NULL
+                ${yearParam ? "AND strftime('%Y', e.document_date) = ?" : ""}
+            ),
+            filtered_expenses AS (
+                -- Get relevant expenses based on filters
                 SELECT 
                     e.deputy_id,
-                    e.net_value
+                    SUM(e.net_value) as expense_sum
                 FROM expenses e
-                WHERE 1=1 ${whereClause ? whereClause.replace('WHERE ', ' AND ') : ''}
+                JOIN active_deputies ad ON e.deputy_id = ad.deputy_id
+                WHERE 1=1
+                ${expenseFilter}
+                ${yearParam ? "AND strftime('%Y', e.document_date) = ?" : ""}
+                GROUP BY e.deputy_id
             ),
             party_totals AS (
+                -- Calculate party-level aggregates
                 SELECT 
-                    d.party,
-                    COUNT(DISTINCT d.id) as deputy_count,
-                    COALESCE(SUM(fe.net_value), 0) as total_spent,
-                    COALESCE(SUM(fe.net_value), 0) / COUNT(DISTINCT d.id) as avg_per_deputy
-                FROM deputies d
-                LEFT JOIN filtered_expenses fe ON d.id = fe.deputy_id
-                WHERE d.party IS NOT NULL
-                GROUP BY d.party
+                    ad.party,
+                    COUNT(DISTINCT ad.deputy_id) as deputy_count,
+                    COALESCE(SUM(fe.expense_sum), 0) as total_spent,
+                    COALESCE(SUM(fe.expense_sum), 0) / COUNT(DISTINCT ad.deputy_id) as avg_per_deputy
+                FROM active_deputies ad
+                LEFT JOIN filtered_expenses fe ON ad.deputy_id = fe.deputy_id
+                GROUP BY ad.party
             ),
             stats AS (
+                -- Calculate overall statistics
                 SELECT 
                     AVG(CASE WHEN total_spent > 0 THEN avg_per_deputy ELSE NULL END) as overall_average
                 FROM party_totals
             )
+            -- Final result set
             SELECT 
                 pt.party,
                 pt.deputy_count,
@@ -190,10 +212,18 @@ app.get('/api/expenses/party-analysis', async (req, res) => {
                 RANK() OVER (ORDER BY pt.avg_per_deputy DESC) as rank
             FROM party_totals pt, stats s
             ORDER BY pt.avg_per_deputy DESC
-        `, params);
-
+        `;
+        
+        // Add year param twice if needed (once for active_deputies, once for filtered_expenses)
+        if (yearParam) {
+            params.push(yearParam);
+            params.push(yearParam);
+        }
+        
+        const analysis = await db.all(query, params);
         res.json(analysis);
     } catch (error) {
+        console.error('Party analysis error:', error);
         res.status(500).json({ error: error.message });
     }
 });
@@ -203,65 +233,87 @@ app.get('/api/expenses/state-analysis', async (req, res) => {
     const { expenseType, year } = req.query;
     
     try {
-        const conditions = ['d.state IS NOT NULL'];
         const params = [];
+        let expenseFilter = '';
         
+        // Build filter conditions
         if (expenseType !== 'all') {
-            conditions.push('e.expense_type = ?');
+            expenseFilter = 'AND e.expense_type = ?';
             params.push(expenseType);
         }
-        if (year) {
-            conditions.push("strftime('%Y', e.document_date) = ?");
-            params.push(year);
-        }
+
+        // Year filter will be applied directly in the SQL
+        const yearParam = year || null;
         
-        const whereClause = 'WHERE ' + conditions.join(' AND ');
-        
-        const analysis = await db.all(`
-            WITH filtered_expenses AS (
+        // Create the query with cleaner structure
+        const query = `
+            WITH active_deputies AS (
+                -- Get active deputies for the selected year with their state
+                SELECT DISTINCT e.deputy_id, d.state
+                FROM expenses e
+                JOIN deputies d ON e.deputy_id = d.id
+                WHERE d.state IS NOT NULL
+                ${yearParam ? "AND strftime('%Y', e.document_date) = ?" : ""}
+            ),
+            filtered_expenses AS (
+                -- Get relevant expenses based on filters
                 SELECT 
                     e.deputy_id,
-                    e.net_value
+                    SUM(e.net_value) as expense_sum
                 FROM expenses e
-                WHERE 1=1 ${whereClause ? whereClause.replace('WHERE ', ' AND ') : ''}
+                JOIN active_deputies ad ON e.deputy_id = ad.deputy_id
+                WHERE 1=1
+                ${expenseFilter}
+                ${yearParam ? "AND strftime('%Y', e.document_date) = ?" : ""}
+                GROUP BY e.deputy_id
             ),
             state_totals AS (
+                -- Calculate state-level aggregates
                 SELECT 
-                    d.state,
-                    COUNT(DISTINCT d.id) as deputy_count,
-                    COALESCE(SUM(fe.net_value), 0) as total_spent,
-                    COALESCE(SUM(fe.net_value), 0) / COUNT(DISTINCT d.id) as avg_per_deputy
-                FROM deputies d
-                LEFT JOIN filtered_expenses fe ON d.id = fe.deputy_id
-                WHERE d.state IS NOT NULL
-                GROUP BY d.state
+                    ad.state,
+                    COUNT(DISTINCT ad.deputy_id) as deputy_count,
+                    COALESCE(SUM(fe.expense_sum), 0) as total_spent,
+                    COALESCE(SUM(fe.expense_sum), 0) / COUNT(DISTINCT ad.deputy_id) as avg_per_deputy
+                FROM active_deputies ad
+                LEFT JOIN filtered_expenses fe ON ad.deputy_id = fe.deputy_id
+                GROUP BY ad.state
             ),
             stats AS (
+                -- Calculate overall statistics
                 SELECT 
                     AVG(CASE WHEN total_spent > 0 THEN avg_per_deputy ELSE NULL END) as overall_average
                 FROM state_totals
             )
+            -- Final result set
             SELECT 
-                pt.state,
-                pt.deputy_count,
-                pt.total_spent,
-                pt.avg_per_deputy,
+                st.state,
+                st.deputy_count,
+                st.total_spent,
+                st.avg_per_deputy,
                 s.overall_average,
                 CASE
-                    WHEN pt.total_spent > 0 THEN ((pt.avg_per_deputy - s.overall_average) / s.overall_average * 100)
+                    WHEN st.total_spent > 0 THEN ((st.avg_per_deputy - s.overall_average) / s.overall_average * 100)
                     ELSE -100 -- No spending means 100% below average
                 END as percentage_diff,
                 CASE
-                    WHEN pt.total_spent > 0 THEN (pt.avg_per_deputy - s.overall_average)
+                    WHEN st.total_spent > 0 THEN (st.avg_per_deputy - s.overall_average)
                     ELSE -s.overall_average -- Difference is the negative of the average
                 END as absolute_diff,
-                RANK() OVER (ORDER BY pt.avg_per_deputy DESC) as rank
-            FROM state_totals pt, stats s
-            ORDER BY pt.avg_per_deputy DESC
-        `, params);
-
+                RANK() OVER (ORDER BY st.avg_per_deputy DESC) as rank
+            FROM state_totals st, stats s
+            ORDER BY st.avg_per_deputy DESC
+        `;
+        
+        // Add year param twice if needed (once for active_deputies, once for filtered_expenses)
+        if (yearParam) {
+            params.push(yearParam);
+            params.push(yearParam);
+        }
+        
+        const analysis = await db.all(query, params);
         res.json(analysis);
     } catch (error) {
+        console.error('State analysis error:', error);
         res.status(500).json({ error: error.message });
     }
 });
