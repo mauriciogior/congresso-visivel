@@ -63,39 +63,64 @@ app.get('/api/expenses/analysis', async (req, res) => {
         const whereClause = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
         
         const analysis = await db.all(`
-            WITH deputy_expenses AS (
+            WITH filtered_expenses AS (
+                SELECT 
+                    e.deputy_id,
+                    e.net_value,
+                    e.document_date
+                FROM expenses e
+                WHERE 1=1 ${whereClause ? whereClause.replace('WHERE ', ' AND ') : ''}
+            ),
+            deputy_expenses AS (
                 SELECT 
                     d.id,
                     d.name,
                     d.party,
                     d.state,
-                    SUM(e.net_value) as total_spent,
-                    COUNT(DISTINCT strftime('%Y-%m', e.document_date)) as months_with_expenses
+                    COALESCE(SUM(fe.net_value), 0) as total_spent,
+                    COALESCE(COUNT(DISTINCT strftime('%Y-%m', fe.document_date)), 0) as months_with_expenses
                 FROM deputies d
-                LEFT JOIN expenses e ON d.id = e.deputy_id
-                ${whereClause}
+                LEFT JOIN filtered_expenses fe ON d.id = fe.deputy_id
                 GROUP BY d.id, d.name, d.party, d.state
             ),
             stats AS (
                 SELECT 
-                    AVG(total_spent) as average_total,
-                    AVG(total_spent / CAST(months_with_expenses as float)) as average_monthly
+                    AVG(CASE WHEN total_spent > 0 THEN total_spent ELSE NULL END) as average_total,
+                    AVG(CASE WHEN months_with_expenses > 0 THEN total_spent / CAST(months_with_expenses as float) ELSE NULL END) as average_monthly
                 FROM deputy_expenses
-                WHERE months_with_expenses > 0
             )
             SELECT 
-                de.*,
-                (de.total_spent / CAST(de.months_with_expenses as float)) as monthly_average,
+                de.id,
+                de.name,
+                de.party,
+                de.state,
+                de.total_spent,
+                de.months_with_expenses,
+                CASE 
+                    WHEN de.months_with_expenses > 0 THEN de.total_spent / CAST(de.months_with_expenses as float)
+                    ELSE 0 
+                END as monthly_average,
                 s.average_total,
                 s.average_monthly,
-                ((de.total_spent - s.average_total) / s.average_total * 100) as total_percentage_diff,
-                (de.total_spent - s.average_total) as total_absolute_diff,
-                (((de.total_spent / CAST(de.months_with_expenses as float)) - s.average_monthly) / s.average_monthly * 100) as monthly_percentage_diff,
-                ((de.total_spent / CAST(de.months_with_expenses as float)) - s.average_monthly) as monthly_absolute_diff,
-                RANK() OVER (ORDER BY total_spent DESC) as total_rank,
-                RANK() OVER (ORDER BY (total_spent / CAST(months_with_expenses as float)) DESC) as monthly_rank
+                CASE 
+                    WHEN de.total_spent > 0 THEN ((de.total_spent - s.average_total) / s.average_total * 100)
+                    ELSE -100 -- No spending means 100% below average
+                END as total_percentage_diff,
+                CASE 
+                    WHEN de.total_spent > 0 THEN (de.total_spent - s.average_total)
+                    ELSE -s.average_total -- Difference is the negative of the average
+                END as total_absolute_diff,
+                CASE 
+                    WHEN de.months_with_expenses > 0 THEN (((de.total_spent / CAST(de.months_with_expenses as float)) - s.average_monthly) / s.average_monthly * 100)
+                    ELSE -100 -- No monthly spending means 100% below average
+                END as monthly_percentage_diff,
+                CASE 
+                    WHEN de.months_with_expenses > 0 THEN ((de.total_spent / CAST(de.months_with_expenses as float)) - s.average_monthly)
+                    ELSE -s.average_monthly -- Difference is the negative of the average
+                END as monthly_absolute_diff,
+                RANK() OVER (ORDER BY de.total_spent DESC) as total_rank,
+                RANK() OVER (ORDER BY (CASE WHEN de.months_with_expenses > 0 THEN de.total_spent / CAST(de.months_with_expenses as float) ELSE 0 END) DESC) as monthly_rank
             FROM deputy_expenses de, stats s
-            WHERE de.months_with_expenses > 0
             ORDER BY total_spent DESC
         `, params);
 
@@ -125,27 +150,43 @@ app.get('/api/expenses/party-analysis', async (req, res) => {
         const whereClause = 'WHERE ' + conditions.join(' AND ');
         
         const analysis = await db.all(`
-            WITH party_totals AS (
+            WITH filtered_expenses AS (
+                SELECT 
+                    e.deputy_id,
+                    e.net_value
+                FROM expenses e
+                WHERE 1=1 ${whereClause ? whereClause.replace('WHERE ', ' AND ') : ''}
+            ),
+            party_totals AS (
                 SELECT 
                     d.party,
                     COUNT(DISTINCT d.id) as deputy_count,
-                    SUM(e.net_value) as total_spent,
-                    SUM(e.net_value) / COUNT(DISTINCT d.id) as avg_per_deputy
+                    COALESCE(SUM(fe.net_value), 0) as total_spent,
+                    COALESCE(SUM(fe.net_value), 0) / COUNT(DISTINCT d.id) as avg_per_deputy
                 FROM deputies d
-                LEFT JOIN expenses e ON d.id = e.deputy_id
-                ${whereClause}
+                LEFT JOIN filtered_expenses fe ON d.id = fe.deputy_id
+                WHERE d.party IS NOT NULL
                 GROUP BY d.party
             ),
             stats AS (
                 SELECT 
-                    AVG(avg_per_deputy) as overall_average
+                    AVG(CASE WHEN total_spent > 0 THEN avg_per_deputy ELSE NULL END) as overall_average
                 FROM party_totals
             )
             SELECT 
-                pt.*,
+                pt.party,
+                pt.deputy_count,
+                pt.total_spent,
+                pt.avg_per_deputy,
                 s.overall_average,
-                ((pt.avg_per_deputy - s.overall_average) / s.overall_average * 100) as percentage_diff,
-                (pt.avg_per_deputy - s.overall_average) as absolute_diff,
+                CASE
+                    WHEN pt.total_spent > 0 THEN ((pt.avg_per_deputy - s.overall_average) / s.overall_average * 100)
+                    ELSE -100 -- No spending means 100% below average
+                END as percentage_diff,
+                CASE
+                    WHEN pt.total_spent > 0 THEN (pt.avg_per_deputy - s.overall_average)
+                    ELSE -s.overall_average -- Difference is the negative of the average
+                END as absolute_diff,
                 RANK() OVER (ORDER BY pt.avg_per_deputy DESC) as rank
             FROM party_totals pt, stats s
             ORDER BY pt.avg_per_deputy DESC
@@ -177,27 +218,43 @@ app.get('/api/expenses/state-analysis', async (req, res) => {
         const whereClause = 'WHERE ' + conditions.join(' AND ');
         
         const analysis = await db.all(`
-            WITH state_totals AS (
+            WITH filtered_expenses AS (
+                SELECT 
+                    e.deputy_id,
+                    e.net_value
+                FROM expenses e
+                WHERE 1=1 ${whereClause ? whereClause.replace('WHERE ', ' AND ') : ''}
+            ),
+            state_totals AS (
                 SELECT 
                     d.state,
                     COUNT(DISTINCT d.id) as deputy_count,
-                    SUM(e.net_value) as total_spent,
-                    SUM(e.net_value) / COUNT(DISTINCT d.id) as avg_per_deputy
+                    COALESCE(SUM(fe.net_value), 0) as total_spent,
+                    COALESCE(SUM(fe.net_value), 0) / COUNT(DISTINCT d.id) as avg_per_deputy
                 FROM deputies d
-                LEFT JOIN expenses e ON d.id = e.deputy_id
-                ${whereClause}
+                LEFT JOIN filtered_expenses fe ON d.id = fe.deputy_id
+                WHERE d.state IS NOT NULL
                 GROUP BY d.state
             ),
             stats AS (
                 SELECT 
-                    AVG(avg_per_deputy) as overall_average
+                    AVG(CASE WHEN total_spent > 0 THEN avg_per_deputy ELSE NULL END) as overall_average
                 FROM state_totals
             )
             SELECT 
-                pt.*,
+                pt.state,
+                pt.deputy_count,
+                pt.total_spent,
+                pt.avg_per_deputy,
                 s.overall_average,
-                ((pt.avg_per_deputy - s.overall_average) / s.overall_average * 100) as percentage_diff,
-                (pt.avg_per_deputy - s.overall_average) as absolute_diff,
+                CASE
+                    WHEN pt.total_spent > 0 THEN ((pt.avg_per_deputy - s.overall_average) / s.overall_average * 100)
+                    ELSE -100 -- No spending means 100% below average
+                END as percentage_diff,
+                CASE
+                    WHEN pt.total_spent > 0 THEN (pt.avg_per_deputy - s.overall_average)
+                    ELSE -s.overall_average -- Difference is the negative of the average
+                END as absolute_diff,
                 RANK() OVER (ORDER BY pt.avg_per_deputy DESC) as rank
             FROM state_totals pt, stats s
             ORDER BY pt.avg_per_deputy DESC

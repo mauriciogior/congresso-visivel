@@ -24,6 +24,9 @@ This project is a web application that analyzes and displays expense data from B
   - `/api/expenses/analysis` - Analyze expenses by deputy
   - `/api/expenses/party-analysis` - Analyze expenses by party
   - `/api/expenses/state-analysis` - Analyze expenses by state
+- Properly handles cases where deputies, parties, or states have no expenses for specific types or years
+  - Returns zero values rather than omitting the items
+  - Calculates proper differences from average values
 - Runs on port 3002 by default
 
 ## Frontend
@@ -131,3 +134,7 @@ npm run preview
 - The application uses a SQLite database stored in the project root
 - The frontend uses URL parameters to maintain state (view, expense type, search queries, etc.)
 - The project uses Brazilian Portuguese for user-facing text
+- Expense metrics are displayed in two ways:
+  - "Total no ano" - Shows the total annual expense for the selected year
+  - "Média Mensal" - Shows the monthly average expense for months with expenses
+- Position ranks are displayed with a hashtag prefix (e.g., #1, #2, #3) for better readability

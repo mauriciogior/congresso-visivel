@@ -140,7 +140,7 @@ const sortedParties = computed(() => {
             class="cursor-pointer hover:bg-gray-50"
           >
             <div class="flex items-center">
-              Total Gasto
+              Total no ano
               <component :is="getSortIcon('total')" class="ml-1 h-4 w-4" v-if="sortColumn === 'total'" />
             </div>
           </TableHead>
@@ -201,7 +201,7 @@ const sortedParties = computed(() => {
           :key="party.party"
           :class="{'bg-yellow-50': searchQuery && party.party.toLowerCase().includes(searchQuery.toLowerCase())}"
         >
-          <TableCell class="font-medium">{{ party.rank }}</TableCell>
+          <TableCell class="font-medium">#{{ party.rank }}</TableCell>
           <TableCell>{{ party.party }}</TableCell>
           <TableCell class="text-gray-500">{{ party.deputy_count }}</TableCell>
           <TableCell>{{ formatCurrency(party.total_spent) }}</TableCell>

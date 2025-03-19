@@ -123,7 +123,7 @@ const sortedDeputies = computed(() => {
               boxShadow: deputyMetric === 'total' ? '0 4px 6px -1px rgba(0, 0, 0, 0.1)' : 'none'
             }"
           >
-            Total Gasto
+            Total no ano
           </button>
           <button 
             @click="emit('update:deputyMetric', 'monthly')"
@@ -180,7 +180,7 @@ const sortedDeputies = computed(() => {
             class="cursor-pointer hover:bg-gray-50"
           >
             <div class="flex items-center">
-              {{ deputyMetric === 'total' ? 'Total Gasto' : 'Média Mensal' }}
+              {{ deputyMetric === 'total' ? 'Total no ano' : 'Média Mensal' }}
               <component :is="getSortIcon('value')" class="ml-1 h-4 w-4" v-if="sortColumn === 'value'" />
             </div>
           </TableHead>
@@ -237,7 +237,7 @@ const sortedDeputies = computed(() => {
         <!-- Data rows -->
         <TableRow v-else v-for="deputy in sortedDeputies" :key="deputy.id">
           <TableCell class="font-medium">
-            {{ deputyMetric === 'total' ? deputy.total_rank : deputy.monthly_rank }}
+            #{{ deputyMetric === 'total' ? deputy.total_rank : deputy.monthly_rank }}
           </TableCell>
           <TableCell>{{ deputy.name }}</TableCell>
           <TableCell class="text-gray-500">{{ deputy.party }}/{{ deputy.state }}</TableCell>

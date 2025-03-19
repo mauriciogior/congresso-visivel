@@ -140,7 +140,7 @@ const sortedStates = computed(() => {
             class="cursor-pointer hover:bg-gray-50"
           >
             <div class="flex items-center">
-              Total Gasto
+              Total no ano
               <component :is="getSortIcon('total')" class="ml-1 h-4 w-4" v-if="sortColumn === 'total'" />
             </div>
           </TableHead>
@@ -201,7 +201,7 @@ const sortedStates = computed(() => {
           :key="state.state"
           :class="{'bg-yellow-50': searchQuery && state.state.toLowerCase().includes(searchQuery.toLowerCase())}"
         >
-          <TableCell class="font-medium">{{ state.rank }}</TableCell>
+          <TableCell class="font-medium">#{{ state.rank }}</TableCell>
           <TableCell>{{ state.state }}</TableCell>
           <TableCell class="text-gray-500">{{ state.deputy_count }}</TableCell>
           <TableCell>{{ formatCurrency(state.total_spent) }}</TableCell>
