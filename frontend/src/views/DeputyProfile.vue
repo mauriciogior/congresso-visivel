@@ -264,6 +264,17 @@ const totalExpenditure = computed(() => {
   return filteredExpenses.value.reduce((total, expense) => total + expense.net_value, 0)
 })
 
+// Format expense type to be camelCase (capitalize each word)
+function formatExpenseType(type) {
+  if (!type) return '';
+  if (type === 'all') return 'Todos os tipos';
+  
+  return type
+    .split(' ')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
+}
+
 // Helper function to format month names
 function getMonthName(month) {
   if (month === 'all') {
@@ -344,7 +355,7 @@ function getMonthName(month) {
                   <p><span class="font-medium">Partido:</span> {{ deputy.party }}</p>
                   <p><span class="font-medium">Estado:</span> {{ deputy.state }}</p>
                   <p v-if="deputy.email">
-                    <span class="font-medium">Email:</span> 
+                    <span class="font-medium">Email: </span> 
                     <a :href="`mailto:${deputy.email}`" class="text-blue-600 hover:underline">
                       {{ deputy.email }}
                     </a>
@@ -376,7 +387,7 @@ function getMonthName(month) {
                       :key="type" 
                       :value="type"
                     >
-                      {{ type }}
+                      {{ formatExpenseType(type) }}
                     </SelectItem>
                   </SelectContent>
                 </Select>
@@ -529,7 +540,7 @@ function getMonthName(month) {
                 <TableBody>
                   <TableRow v-for="expense in filteredExpenses" :key="expense.id">
                     <TableCell>{{ formatDate(expense.document_date) }}</TableCell>
-                    <TableCell>{{ expense.expense_type }}</TableCell>
+                    <TableCell>{{ formatExpenseType(expense.expense_type) }}</TableCell>
                     <TableCell>{{ expense.supplier_name || '-' }}</TableCell>
                     <TableCell>
                       <div class="text-sm">
