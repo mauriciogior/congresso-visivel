@@ -45,7 +45,12 @@ This project is a web application that analyzes and displays expense data from B
 - Search functionality for each view
 
 ### Components
-- Uses Shadcn UI components (Button, Card, Table, etc.)
+- Uses Shadcn UI components:
+  - Button
+  - Card (CardHeader, CardTitle, CardContent)
+  - Table (Table, TableHeader, TableHead, TableBody, TableRow, TableCell, TableCaption)
+  - Input
+  - Tabs (Tabs, TabsList, TabsTrigger)
 - Custom utility functions for formatting and data display
 
 ## Commands

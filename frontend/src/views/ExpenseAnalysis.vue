@@ -13,6 +13,15 @@ import CardContent from '../components/ui/card/CardContent.vue'
 import Tabs from '../components/ui/tabs/Tabs.vue'
 import TabsList from '../components/ui/tabs/TabsList.vue'
 import TabsTrigger from '../components/ui/tabs/TabsTrigger.vue'
+import { 
+  Table, 
+  TableHeader, 
+  TableHead, 
+  TableBody, 
+  TableRow, 
+  TableCell, 
+  TableCaption 
+} from '../components/ui/table'
 
 const route = useRoute()
 const router = useRouter()
@@ -476,25 +485,23 @@ watch([selectedExpenseType, currentView, selectedYear], fetchAnalysis)
             </div>
           </div>
 
-          <table class="min-w-full divide-y divide-gray-200">
-            <caption class="text-sm text-gray-500 mb-2">Lista de gastos por deputado</caption>
-            <thead class="bg-gray-50">
-              <tr>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Posição</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Deputado</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Partido/Estado</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  {{ deputyMetric === 'total' ? 'Total Gasto' : 'Média Mensal' }}
-                </th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Meses Ativos</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Diferença da Média</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">% da Média</th>
-              </tr>
-            </thead>
-            <tbody class="bg-white divide-y divide-gray-200">
+          <Table>
+            <TableCaption>Lista de gastos por deputado</TableCaption>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Posição</TableHead>
+                <TableHead>Deputado</TableHead>
+                <TableHead>Partido/Estado</TableHead>
+                <TableHead>{{ deputyMetric === 'total' ? 'Total Gasto' : 'Média Mensal' }}</TableHead>
+                <TableHead>Meses Ativos</TableHead>
+                <TableHead>Diferença da Média</TableHead>
+                <TableHead>% da Média</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               <!-- Loading state -->
-              <tr v-if="isLoading">
-                <td colspan="7" class="px-6 py-10 text-center">
+              <TableRow v-if="isLoading">
+                <TableCell colspan="7" class="h-24 text-center">
                   <div class="flex justify-center items-center">
                     <svg class="animate-spin h-8 w-8 text-blue-600 mr-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                       <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -502,61 +509,59 @@ watch([selectedExpenseType, currentView, selectedYear], fetchAnalysis)
                     </svg>
                     <span class="text-gray-600 text-lg">Carregando dados...</span>
                   </div>
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
               
               <!-- No results message -->
-              <tr v-else-if="filteredAnalysis.length === 0">
-                <td colspan="7" class="px-6 py-10 text-center text-gray-500">
+              <TableRow v-else-if="filteredAnalysis.length === 0">
+                <TableCell colspan="7" class="h-24 text-center text-gray-500">
                   Nenhum resultado encontrado
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
               
               <!-- Data rows -->
-              <tr v-else v-for="deputy in filteredAnalysis" :key="deputy.id">
-                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+              <TableRow v-else v-for="deputy in filteredAnalysis" :key="deputy.id">
+                <TableCell class="font-medium">
                   {{ deputyMetric === 'total' ? deputy.total_rank : deputy.monthly_rank }}
-                </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ deputy.name }}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ deputy.party }}/{{ deputy.state }}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                </TableCell>
+                <TableCell>{{ deputy.name }}</TableCell>
+                <TableCell class="text-gray-500">{{ deputy.party }}/{{ deputy.state }}</TableCell>
+                <TableCell>
                   {{ formatCurrency(deputyMetric === 'total' ? deputy.total_spent : deputy.monthly_average) }}
-                </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                </TableCell>
+                <TableCell class="text-gray-500">
                   {{ deputy.months_with_expenses }}
-                </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm" 
-                    :class="getDiffClass(deputyMetric === 'total' ? deputy.total_absolute_diff : deputy.monthly_absolute_diff)">
+                </TableCell>
+                <TableCell :class="getDiffClass(deputyMetric === 'total' ? deputy.total_absolute_diff : deputy.monthly_absolute_diff)">
                   {{ formatCurrency(deputyMetric === 'total' ? deputy.total_absolute_diff : deputy.monthly_absolute_diff) }}
-                </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm"
-                    :class="getDiffClass(deputyMetric === 'total' ? deputy.total_percentage_diff : deputy.monthly_percentage_diff)">
+                </TableCell>
+                <TableCell :class="getDiffClass(deputyMetric === 'total' ? deputy.total_percentage_diff : deputy.monthly_percentage_diff)">
                   {{ formatPercentage(deputyMetric === 'total' ? deputy.total_percentage_diff : deputy.monthly_percentage_diff) }}
-                </td>
-              </tr>
-            </tbody>
-          </table>
+                </TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
         </div>
 
         <!-- Parties View -->
         <div v-else-if="currentView === 'parties'" class="overflow-x-auto">
-          <table class="min-w-full divide-y divide-gray-200">
-            <caption class="text-sm text-gray-500 mb-2">Lista de gastos por partido</caption>
-            <thead class="bg-gray-50">
-              <tr>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Posição</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Partido</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Deputados</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Gasto</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Média por Deputado</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Diferença da Média</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">% da Média</th>
-              </tr>
-            </thead>
-            <tbody class="bg-white divide-y divide-gray-200">
+          <Table>
+            <TableCaption>Lista de gastos por partido</TableCaption>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Posição</TableHead>
+                <TableHead>Partido</TableHead>
+                <TableHead>Deputados</TableHead>
+                <TableHead>Total Gasto</TableHead>
+                <TableHead>Média por Deputado</TableHead>
+                <TableHead>Diferença da Média</TableHead>
+                <TableHead>% da Média</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               <!-- Loading state -->
-              <tr v-if="isLoading">
-                <td colspan="7" class="px-6 py-10 text-center">
+              <TableRow v-if="isLoading">
+                <TableCell colspan="7" class="h-24 text-center">
                   <div class="flex justify-center items-center">
                     <svg class="animate-spin h-8 w-8 text-blue-600 mr-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                       <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -564,58 +569,58 @@ watch([selectedExpenseType, currentView, selectedYear], fetchAnalysis)
                     </svg>
                     <span class="text-gray-600 text-lg">Carregando dados...</span>
                   </div>
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
               
               <!-- No results message -->
-              <tr v-else-if="filteredPartyAnalysis.length === 0">
-                <td colspan="7" class="px-6 py-10 text-center text-gray-500">
+              <TableRow v-else-if="filteredPartyAnalysis.length === 0">
+                <TableCell colspan="7" class="h-24 text-center text-gray-500">
                   Nenhum resultado encontrado
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
               
               <!-- Data rows -->
-              <tr 
+              <TableRow 
                 v-else
                 v-for="party in filteredPartyAnalysis" 
                 :key="party.party"
                 :class="{'bg-yellow-50': partySearchQuery && party.party.toLowerCase().includes(partySearchQuery.toLowerCase())}"
               >
-                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ party.rank }}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ party.party }}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ party.deputy_count }}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ formatCurrency(party.total_spent) }}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ formatCurrency(party.avg_per_deputy) }}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm" :class="party.absolute_diff > 0 ? 'text-red-600' : 'text-green-600'">
+                <TableCell class="font-medium">{{ party.rank }}</TableCell>
+                <TableCell>{{ party.party }}</TableCell>
+                <TableCell class="text-gray-500">{{ party.deputy_count }}</TableCell>
+                <TableCell>{{ formatCurrency(party.total_spent) }}</TableCell>
+                <TableCell>{{ formatCurrency(party.avg_per_deputy) }}</TableCell>
+                <TableCell :class="party.absolute_diff > 0 ? 'text-red-600' : 'text-green-600'">
                   {{ formatCurrency(party.absolute_diff) }}
-                </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm" :class="party.percentage_diff > 0 ? 'text-red-600' : 'text-green-600'">
+                </TableCell>
+                <TableCell :class="party.percentage_diff > 0 ? 'text-red-600' : 'text-green-600'">
                   {{ formatPercentage(party.percentage_diff) }}
-                </td>
-              </tr>
-            </tbody>
-          </table>
+                </TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
         </div>
 
         <!-- States View -->
         <div v-else-if="currentView === 'states'" class="overflow-x-auto">
-          <table class="min-w-full divide-y divide-gray-200">
-            <caption class="text-sm text-gray-500 mb-2">Lista de gastos por estado</caption>
-            <thead class="bg-gray-50">
-              <tr>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Posição</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Deputados</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Gasto</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Média por Deputado</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Diferença da Média</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">% da Média</th>
-              </tr>
-            </thead>
-            <tbody class="bg-white divide-y divide-gray-200">
+          <Table>
+            <TableCaption>Lista de gastos por estado</TableCaption>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Posição</TableHead>
+                <TableHead>Estado</TableHead>
+                <TableHead>Deputados</TableHead>
+                <TableHead>Total Gasto</TableHead>
+                <TableHead>Média por Deputado</TableHead>
+                <TableHead>Diferença da Média</TableHead>
+                <TableHead>% da Média</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               <!-- Loading state -->
-              <tr v-if="isLoading">
-                <td colspan="7" class="px-6 py-10 text-center">
+              <TableRow v-if="isLoading">
+                <TableCell colspan="7" class="h-24 text-center">
                   <div class="flex justify-center items-center">
                     <svg class="animate-spin h-8 w-8 text-blue-600 mr-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                       <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -623,37 +628,37 @@ watch([selectedExpenseType, currentView, selectedYear], fetchAnalysis)
                     </svg>
                     <span class="text-gray-600 text-lg">Carregando dados...</span>
                   </div>
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
               
               <!-- No results message -->
-              <tr v-else-if="filteredStateAnalysis.length === 0">
-                <td colspan="7" class="px-6 py-10 text-center text-gray-500">
+              <TableRow v-else-if="filteredStateAnalysis.length === 0">
+                <TableCell colspan="7" class="h-24 text-center text-gray-500">
                   Nenhum resultado encontrado
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
               
               <!-- Data rows -->
-              <tr 
+              <TableRow 
                 v-else
                 v-for="state in filteredStateAnalysis" 
                 :key="state.state"
                 :class="{'bg-yellow-50': stateSearchQuery && state.state.toLowerCase().includes(stateSearchQuery.toLowerCase())}"
               >
-                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ state.rank }}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ state.state }}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ state.deputy_count }}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ formatCurrency(state.total_spent) }}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ formatCurrency(state.avg_per_deputy) }}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm" :class="state.absolute_diff > 0 ? 'text-red-600' : 'text-green-600'">
+                <TableCell class="font-medium">{{ state.rank }}</TableCell>
+                <TableCell>{{ state.state }}</TableCell>
+                <TableCell class="text-gray-500">{{ state.deputy_count }}</TableCell>
+                <TableCell>{{ formatCurrency(state.total_spent) }}</TableCell>
+                <TableCell>{{ formatCurrency(state.avg_per_deputy) }}</TableCell>
+                <TableCell :class="state.absolute_diff > 0 ? 'text-red-600' : 'text-green-600'">
                   {{ formatCurrency(state.absolute_diff) }}
-                </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm" :class="state.percentage_diff > 0 ? 'text-red-600' : 'text-green-600'">
+                </TableCell>
+                <TableCell :class="state.percentage_diff > 0 ? 'text-red-600' : 'text-green-600'">
                   {{ formatPercentage(state.percentage_diff) }}
-                </td>
-              </tr>
-            </tbody>
-          </table>
+                </TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
         </div>
         </CardContent>
       </Card>
