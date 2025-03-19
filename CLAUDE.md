@@ -44,6 +44,16 @@ This project is a web application that analyzes and displays expense data from B
 - Filters by expense type and year
 - Search functionality for each view
 
+### Component Organization
+- `ExpenseAnalysis.vue`: Main container component
+- Custom components in `src/components/expense-analysis/`:
+  - `ViewSelector.vue`: Toggle between deputies, parties, and states views
+  - `FilterSection.vue`: Filters for expense type, year, and search
+  - `ResultsCard.vue`: Container for results with appropriate table
+  - `DeputyTable.vue`: Table for deputy expenses
+  - `PartyTable.vue`: Table for party expenses
+  - `StateTable.vue`: Table for state expenses
+
 ### Components
 - Uses Shadcn UI components:
   - Button
