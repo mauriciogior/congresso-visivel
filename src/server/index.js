@@ -56,8 +56,20 @@ app.get('/api/expenses/analysis', async (req, res) => {
             params.push(expenseType);
         }
         if (year) {
-            conditions.push("strftime('%Y', e.document_date) = ?");
-            params.push(year);
+            // Handle election years (2019, 2023, 2027...) - January belongs to previous year
+            const isPostElectionYear = (parseInt(year) - 2019) % 4 === 0;
+            
+            if (isPostElectionYear) {
+                conditions.push("(e.year = ? AND e.month > 1)");
+                params.push(year);
+            } else if (parseInt(year) % 4 === 3) { // Pre-election year (2018, 2022, 2026...)
+                conditions.push("(e.year = ?) OR (e.year = ? AND e.month = 1)");
+                params.push(year);
+                params.push(parseInt(year) + 1);
+            } else {
+                conditions.push("e.year = ?");
+                params.push(year);
+            }
         }
         
         const whereClause = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
@@ -67,7 +79,9 @@ app.get('/api/expenses/analysis', async (req, res) => {
                 SELECT 
                     e.deputy_id,
                     e.net_value,
-                    e.document_date
+                    e.document_date,
+                    e.year,
+                    e.month
                 FROM expenses e
                 WHERE 1=1 ${whereClause ? whereClause.replace('WHERE ', ' AND ') : ''}
             ),
@@ -76,7 +90,13 @@ app.get('/api/expenses/analysis', async (req, res) => {
                 SELECT DISTINCT e.deputy_id, d.party, d.state
                 FROM expenses e
                 JOIN deputies d ON e.deputy_id = d.id
-                WHERE ${year ? `strftime('%Y', e.document_date) = '${year}'` : '1=1'}
+                WHERE ${year ? 
+                    (parseInt(year) - 2019) % 4 === 0 ? 
+                    `(e.year = ${year} AND e.month > 1)` : 
+                    parseInt(year) % 4 === 3 ? 
+                    `(e.year = ${year} OR (e.year = ${parseInt(year) + 1} AND e.month = 1))` :
+                    `e.year = ${year}`
+                : '1=1'}
             ),
             deputy_expenses AS (
                 SELECT 
@@ -85,7 +105,7 @@ app.get('/api/expenses/analysis', async (req, res) => {
                     ad.party,
                     ad.state,
                     COALESCE(SUM(fe.net_value), 0) as total_spent,
-                    COALESCE(COUNT(DISTINCT strftime('%Y-%m', fe.document_date)), 0) as months_with_expenses
+                    COALESCE(COUNT(DISTINCT CAST(fe.year AS TEXT) || '-' || CAST(fe.month AS TEXT)), 0) as months_with_expenses
                 FROM active_deputies ad
                 JOIN deputies d ON ad.deputy_id = d.id
                 LEFT JOIN filtered_expenses fe ON ad.deputy_id = fe.deputy_id
@@ -158,6 +178,24 @@ app.get('/api/expenses/party-analysis', async (req, res) => {
 
         // Year filter will be applied directly in the SQL
         const yearParam = year || null;
+        let yearCondition = '';
+        
+        if (yearParam) {
+            // Handle election years (2019, 2023, 2027...)
+            const isPostElectionYear = (parseInt(yearParam) - 2019) % 4 === 0;
+            
+            if (isPostElectionYear) {
+                yearCondition = "AND (e.year = ? AND e.month > 1)";
+                params.push(yearParam);
+            } else if (parseInt(yearParam) % 4 === 3) { // Pre-election year (2018, 2022, 2026...)
+                yearCondition = "AND (e.year = ? OR (e.year = ? AND e.month = 1))";
+                params.push(yearParam);
+                params.push(parseInt(yearParam) + 1);
+            } else {
+                yearCondition = "AND e.year = ?";
+                params.push(yearParam);
+            }
+        }
         
         // Create the query with cleaner structure
         const query = `
@@ -167,7 +205,7 @@ app.get('/api/expenses/party-analysis', async (req, res) => {
                 FROM expenses e
                 JOIN deputies d ON e.deputy_id = d.id
                 WHERE d.party IS NOT NULL
-                ${yearParam ? "AND strftime('%Y', e.document_date) = ?" : ""}
+                ${yearCondition}
             ),
             filtered_expenses AS (
                 -- Get relevant expenses based on filters
@@ -178,7 +216,7 @@ app.get('/api/expenses/party-analysis', async (req, res) => {
                 JOIN active_deputies ad ON e.deputy_id = ad.deputy_id
                 WHERE 1=1
                 ${expenseFilter}
-                ${yearParam ? "AND strftime('%Y', e.document_date) = ?" : ""}
+                ${yearCondition}
                 GROUP BY e.deputy_id
             ),
             party_totals AS (
@@ -218,12 +256,6 @@ app.get('/api/expenses/party-analysis', async (req, res) => {
             ORDER BY pt.avg_per_deputy DESC
         `;
         
-        // Add year param twice if needed (once for active_deputies, once for filtered_expenses)
-        if (yearParam) {
-            params.push(yearParam);
-            params.push(yearParam);
-        }
-        
         const analysis = await db.all(query, params);
         res.json(analysis);
     } catch (error) {
@@ -248,6 +280,24 @@ app.get('/api/expenses/state-analysis', async (req, res) => {
 
         // Year filter will be applied directly in the SQL
         const yearParam = year || null;
+        let yearCondition = '';
+        
+        if (yearParam) {
+            // Handle election years (2019, 2023, 2027...)
+            const isPostElectionYear = (parseInt(yearParam) - 2019) % 4 === 0;
+            
+            if (isPostElectionYear) {
+                yearCondition = "AND (e.year = ? AND e.month > 1)";
+                params.push(yearParam);
+            } else if (parseInt(yearParam) % 4 === 3) { // Pre-election year (2018, 2022, 2026...)
+                yearCondition = "AND (e.year = ? OR (e.year = ? AND e.month = 1))";
+                params.push(yearParam);
+                params.push(parseInt(yearParam) + 1);
+            } else {
+                yearCondition = "AND e.year = ?";
+                params.push(yearParam);
+            }
+        }
         
         // Create the query with cleaner structure
         const query = `
@@ -257,7 +307,7 @@ app.get('/api/expenses/state-analysis', async (req, res) => {
                 FROM expenses e
                 JOIN deputies d ON e.deputy_id = d.id
                 WHERE d.state IS NOT NULL
-                ${yearParam ? "AND strftime('%Y', e.document_date) = ?" : ""}
+                ${yearCondition}
             ),
             filtered_expenses AS (
                 -- Get relevant expenses based on filters
@@ -268,7 +318,7 @@ app.get('/api/expenses/state-analysis', async (req, res) => {
                 JOIN active_deputies ad ON e.deputy_id = ad.deputy_id
                 WHERE 1=1
                 ${expenseFilter}
-                ${yearParam ? "AND strftime('%Y', e.document_date) = ?" : ""}
+                ${yearCondition}
                 GROUP BY e.deputy_id
             ),
             state_totals AS (
@@ -307,12 +357,6 @@ app.get('/api/expenses/state-analysis', async (req, res) => {
             FROM state_totals st, stats s
             ORDER BY st.avg_per_deputy DESC
         `;
-        
-        // Add year param twice if needed (once for active_deputies, once for filtered_expenses)
-        if (yearParam) {
-            params.push(yearParam);
-            params.push(yearParam);
-        }
         
         const analysis = await db.all(query, params);
         res.json(analysis);
@@ -378,13 +422,25 @@ app.get('/api/deputy/:slugOrId', async (req, res) => {
         }
         
         if (year) {
-            conditions.push("strftime('%Y', document_date) = ?");
-            params.push(year);
+            // Handle election years (2019, 2023, 2027...)
+            const isPostElectionYear = (parseInt(year) - 2019) % 4 === 0;
+            
+            if (isPostElectionYear) {
+                conditions.push("(e.year = ? AND e.month > 1)");
+                params.push(year);
+            } else if (parseInt(year) % 4 === 3) { // Pre-election year (2018, 2022, 2026...)
+                conditions.push("(e.year = ? OR (e.year = ? AND e.month = 1))");
+                params.push(year);
+                params.push(parseInt(year) + 1);
+            } else {
+                conditions.push("e.year = ?");
+                params.push(year);
+            }
         }
         
         if (month) {
-            conditions.push("strftime('%m', document_date) = ?");
-            params.push(month.padStart(2, '0')); // Ensure month is 2 digits
+            conditions.push("e.month = ?");
+            params.push(month); 
         }
         
         // Get expense summary by type and date, joining with supplier data
@@ -401,8 +457,8 @@ app.get('/api/deputy/:slugOrId', async (req, res) => {
                 e.supplier_name,
                 e.supplier_id,
                 e.document_url,
-                strftime('%Y', e.document_date) as year,
-                strftime('%m', e.document_date) as month,
+                e.year,
+                e.month,
                 s.name as supplier_full_name,
                 s.founding_date as supplier_founding_date,
                 s.main_activity as supplier_main_activity,
@@ -415,7 +471,7 @@ app.get('/api/deputy/:slugOrId', async (req, res) => {
         
         // Get available years for this deputy
         const years = await db.all(`
-            SELECT DISTINCT strftime('%Y', document_date) as year
+            SELECT DISTINCT year
             FROM expenses
             WHERE deputy_id = ?
             ORDER BY year DESC
@@ -423,11 +479,27 @@ app.get('/api/deputy/:slugOrId', async (req, res) => {
         
         // Get available months if a year is selected
         const months = year ? await db.all(`
-            SELECT DISTINCT strftime('%m', document_date) as month
+            SELECT DISTINCT month
             FROM expenses
-            WHERE deputy_id = ? AND strftime('%Y', document_date) = ?
+            WHERE deputy_id = ? 
+            ${
+                (parseInt(year) - 2019) % 4 === 0 ? 
+                `AND ((year = ? AND month > 1) OR (year = ? AND month = 1))` : 
+                parseInt(year) % 4 === 3 ? 
+                `AND ((year = ? AND month <= 12) OR (year = ? AND month = 1))` :
+                `AND year = ?`
+            }
             ORDER BY month
-        `, [deputy.id, year]) : [];
+        `, [
+            deputy.id,
+            ...(
+                (parseInt(year) - 2019) % 4 === 0 ? 
+                [year, parseInt(year) - 1] : 
+                parseInt(year) % 4 === 3 ? 
+                [year, parseInt(year) + 1] : 
+                [year]
+            )
+        ]) : [];
         
         // Get expense types for this deputy
         const types = await db.all(`
@@ -455,4 +527,4 @@ app.get('/api/deputy/:slugOrId', async (req, res) => {
 const PORT = process.env.PORT || 3002;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
-}); 
+});
