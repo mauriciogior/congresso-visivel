@@ -262,7 +262,13 @@ watch([selectedExpenseType, currentView, selectedYear], fetchAnalysis)
 <template>
   <div class="min-h-screen bg-gray-100 light">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <h1 class="text-3xl font-bold text-gray-900 mb-8">Análise de Despesas Parlamentares</h1>
+      <div class="flex justify-between items-center mb-8">
+        <h1 class="text-3xl font-bold text-gray-900">Análise de Despesas Parlamentares</h1>
+        <router-link to="/walls" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md flex items-center space-x-2">
+          <span>Mural da Transparência</span>
+          <span class="text-sm">🔍</span>
+        </router-link>
+      </div>
       
       <!-- View Toggle -->
       <ViewSelector 

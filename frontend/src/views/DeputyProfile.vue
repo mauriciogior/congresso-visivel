@@ -836,9 +836,18 @@ function getMonthName(month) {
                     <TableCell>{{ formatDate(expense.document_date) }}</TableCell>
                     <TableCell>{{ formatExpenseType(expense.expense_type) }}</TableCell>
                     <TableCell>
-                      <div>{{ expense.supplier_name || '-' }}</div>
+                      <div>{{ expense.supplier_full_name || expense.supplier_name || '-' }}</div>
                       <div v-if="expense.supplier_id" class="text-xs text-gray-500">
                         {{ formatCNPJ(expense.supplier_id) }}
+                      </div>
+                      <div v-if="expense.supplier_founding_date" class="text-xs text-gray-500 mt-1">
+                        Fundada em: {{ expense.supplier_founding_date }}
+                      </div>
+                      <div v-if="expense.supplier_main_activity" class="text-xs text-gray-500">
+                        Atividade: {{ expense.supplier_main_activity }}
+                      </div>
+                      <div v-if="expense.supplier_address" class="text-xs text-gray-500">
+                        Endereço: {{ expense.supplier_address }}
                       </div>
                     </TableCell>
                     <TableCell>

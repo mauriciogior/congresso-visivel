@@ -102,6 +102,7 @@ app.get('/api/expenses/analysis', async (req, res) => {
                 de.name,
                 de.party,
                 de.state,
+                d.photo_url,
                 d.slug,
                 de.total_spent,
                 de.months_with_expenses,
@@ -386,25 +387,30 @@ app.get('/api/deputy/:slugOrId', async (req, res) => {
             params.push(month.padStart(2, '0')); // Ensure month is 2 digits
         }
         
-        // Get expense summary by type and date
+        // Get expense summary by type and date, joining with supplier data
         const expenses = await db.all(`
             SELECT 
-                id,
-                expense_type,
-                document_id,
-                document_type,
-                document_date,
-                document_number,
-                document_value,
-                net_value,
-                supplier_name,
-                supplier_id,
-                document_url,
-                strftime('%Y', document_date) as year,
-                strftime('%m', document_date) as month
-            FROM expenses
+                e.id,
+                e.expense_type,
+                e.document_id,
+                e.document_type,
+                e.document_date,
+                e.document_number,
+                e.document_value,
+                e.net_value,
+                e.supplier_name,
+                e.supplier_id,
+                e.document_url,
+                strftime('%Y', e.document_date) as year,
+                strftime('%m', e.document_date) as month,
+                s.name as supplier_full_name,
+                s.founding_date as supplier_founding_date,
+                s.main_activity as supplier_main_activity,
+                s.address as supplier_address
+            FROM expenses e
+            LEFT JOIN suppliers s ON s.cnpj = e.supplier_id
             WHERE ${conditions.join(' AND ')}
-            ORDER BY document_date DESC
+            ORDER BY e.document_date DESC
         `, params);
         
         // Get available years for this deputy
