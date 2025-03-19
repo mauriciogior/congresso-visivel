@@ -1,5 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import App from '../App.vue'
+import ExpenseAnalysis from '../views/ExpenseAnalysis.vue'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -10,17 +10,19 @@ const router = createRouter({
     },
     {
       path: '/expenses/:view',
-      component: App,
-      props: true,
-      children: [
-        {
-          path: 'type/:expenseType',
-          component: App,
-          props: true
-        }
-      ]
+      component: ExpenseAnalysis,
+      props: true
+    },
+    {
+      path: '/expenses/:view/:expenseType',
+      component: ExpenseAnalysis,
+      props: true
     },
     // Redirect old paths to new structure
+    {
+      path: '/expenses/:view/type/:expenseType',  // Handle old URL format if needed
+      redirect: to => `/expenses/${to.params.view}/${to.params.expenseType}`
+    },
     {
       path: '/:pathMatch(.*)*',
       redirect: '/expenses/deputies'

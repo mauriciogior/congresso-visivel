@@ -174,46 +174,53 @@ async function main() {
         }
     }
 
-    // Fetch expenses for each deputy
+    // Fetch expenses for deputies in parallel batches
     const deputies = await db.all('SELECT id FROM deputies');
+    const BATCH_SIZE = 10; // Process 10 deputies at a time
     
-    for (const deputy of deputies) {
-        let lastProcessedPage = await getLastProcessedPage(db, deputy.id);
-        let expensesUrl = `${BASE_URL}/deputados/${deputy.id}/despesas?idLegislatura=56&itens=1000&ordem=ASC&ordenarPor=ano`;
-        
-        if (lastProcessedPage > 0) {
-            expensesUrl += `&pagina=${lastProcessedPage}`;
-        }
-
-        let currentPage = lastProcessedPage || 1;
-        let hasMoreExpenses = true;
-
-        while (hasMoreExpenses) {
-            try {
-                console.log(`Fetching expenses for deputy ${deputy.id}, page ${currentPage}`);
-                const response = await fetchExpenses(expensesUrl);
-
-                // Save expenses
-                for (const expense of response.dados) {
-                    await saveExpense(db, deputy.id, expense);
-                }
-
-                // Update process log
-                await updateProcessLog(db, deputy.id, currentPage, 'PROCESSED');
-
-                // Check for next page
-                const nextLink = response.links.find(link => link.rel === 'next');
-                if (nextLink) {
-                    expensesUrl = nextLink.href;
-                    currentPage++;
-                } else {
-                    hasMoreExpenses = false;
-                }
-            } catch (error) {
-                console.error(`Error fetching expenses for deputy ${deputy.id}:`, error);
-                break;
+    for (let i = 0; i < deputies.length; i += BATCH_SIZE) {
+        const batch = deputies.slice(i, i + BATCH_SIZE);
+        const promises = batch.map(async (deputy) => {
+            let lastProcessedPage = await getLastProcessedPage(db, deputy.id);
+            let expensesUrl = `${BASE_URL}/deputados/${deputy.id}/despesas?idLegislatura=56&itens=1000&ordem=DESC&ordenarPor=codDocumento`;
+            
+            if (lastProcessedPage > 0) {
+                expensesUrl += `&pagina=${lastProcessedPage}`;
             }
-        }
+
+            let currentPage = lastProcessedPage || 1;
+            let hasMoreExpenses = true;
+
+            while (hasMoreExpenses) {
+                try {
+                    console.log(`Fetching expenses for deputy ${deputy.id}, page ${currentPage}`);
+                    const response = await fetchExpenses(expensesUrl);
+
+                    // Save expenses
+                    for (const expense of response.dados) {
+                        await saveExpense(db, deputy.id, expense);
+                    }
+
+                    // Update process log
+                    await updateProcessLog(db, deputy.id, currentPage, 'PROCESSED');
+
+                    // Check for next page
+                    const nextLink = response.links.find(link => link.rel === 'next');
+                    if (nextLink) {
+                        expensesUrl = nextLink.href;
+                        currentPage++;
+                    } else {
+                        hasMoreExpenses = false;
+                    }
+                } catch (error) {
+                    console.error(`Error fetching expenses for deputy ${deputy.id}:`, error);
+                    break;
+                }
+            }
+        });
+
+        // Wait for current batch to complete before moving to next batch
+        await Promise.all(promises);
     }
 
     await db.close();

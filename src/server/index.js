@@ -45,9 +45,23 @@ app.get('/api/deputies', async (req, res) => {
 
 // Get expenses analysis by type
 app.get('/api/expenses/analysis', async (req, res) => {
-    const { expenseType } = req.query;
+    const { expenseType, year } = req.query;
     
     try {
+        const conditions = [];
+        const params = [];
+        
+        if (expenseType !== 'all') {
+            conditions.push('e.expense_type = ?');
+            params.push(expenseType);
+        }
+        if (year) {
+            conditions.push("strftime('%Y', e.document_date) = ?");
+            params.push(year);
+        }
+        
+        const whereClause = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
+        
         const analysis = await db.all(`
             WITH deputy_expenses AS (
                 SELECT 
@@ -59,7 +73,7 @@ app.get('/api/expenses/analysis', async (req, res) => {
                     COUNT(DISTINCT strftime('%Y-%m', e.document_date)) as months_with_expenses
                 FROM deputies d
                 LEFT JOIN expenses e ON d.id = e.deputy_id
-                WHERE e.expense_type = ?
+                ${whereClause}
                 GROUP BY d.id, d.name, d.party, d.state
             ),
             stats AS (
@@ -83,7 +97,7 @@ app.get('/api/expenses/analysis', async (req, res) => {
             FROM deputy_expenses de, stats s
             WHERE de.months_with_expenses > 0
             ORDER BY total_spent DESC
-        `, [expenseType]);
+        `, params);
 
         res.json(analysis);
     } catch (error) {
@@ -93,9 +107,23 @@ app.get('/api/expenses/analysis', async (req, res) => {
 
 // Add this new endpoint
 app.get('/api/expenses/party-analysis', async (req, res) => {
-    const { expenseType } = req.query;
+    const { expenseType, year } = req.query;
     
     try {
+        const conditions = ['d.party IS NOT NULL'];
+        const params = [];
+        
+        if (expenseType !== 'all') {
+            conditions.push('e.expense_type = ?');
+            params.push(expenseType);
+        }
+        if (year) {
+            conditions.push("strftime('%Y', e.document_date) = ?");
+            params.push(year);
+        }
+        
+        const whereClause = 'WHERE ' + conditions.join(' AND ');
+        
         const analysis = await db.all(`
             WITH party_totals AS (
                 SELECT 
@@ -105,8 +133,7 @@ app.get('/api/expenses/party-analysis', async (req, res) => {
                     SUM(e.net_value) / COUNT(DISTINCT d.id) as avg_per_deputy
                 FROM deputies d
                 LEFT JOIN expenses e ON d.id = e.deputy_id
-                WHERE e.expense_type = ?
-                    AND d.party IS NOT NULL
+                ${whereClause}
                 GROUP BY d.party
             ),
             stats AS (
@@ -122,7 +149,7 @@ app.get('/api/expenses/party-analysis', async (req, res) => {
                 RANK() OVER (ORDER BY pt.avg_per_deputy DESC) as rank
             FROM party_totals pt, stats s
             ORDER BY pt.avg_per_deputy DESC
-        `, [expenseType]);
+        `, params);
 
         res.json(analysis);
     } catch (error) {
@@ -132,9 +159,23 @@ app.get('/api/expenses/party-analysis', async (req, res) => {
 
 // Add this new endpoint
 app.get('/api/expenses/state-analysis', async (req, res) => {
-    const { expenseType } = req.query;
+    const { expenseType, year } = req.query;
     
     try {
+        const conditions = ['d.state IS NOT NULL'];
+        const params = [];
+        
+        if (expenseType !== 'all') {
+            conditions.push('e.expense_type = ?');
+            params.push(expenseType);
+        }
+        if (year) {
+            conditions.push("strftime('%Y', e.document_date) = ?");
+            params.push(year);
+        }
+        
+        const whereClause = 'WHERE ' + conditions.join(' AND ');
+        
         const analysis = await db.all(`
             WITH state_totals AS (
                 SELECT 
@@ -144,8 +185,7 @@ app.get('/api/expenses/state-analysis', async (req, res) => {
                     SUM(e.net_value) / COUNT(DISTINCT d.id) as avg_per_deputy
                 FROM deputies d
                 LEFT JOIN expenses e ON d.id = e.deputy_id
-                WHERE e.expense_type = ?
-                    AND d.state IS NOT NULL
+                ${whereClause}
                 GROUP BY d.state
             ),
             stats AS (
@@ -161,7 +201,7 @@ app.get('/api/expenses/state-analysis', async (req, res) => {
                 RANK() OVER (ORDER BY pt.avg_per_deputy DESC) as rank
             FROM state_totals pt, stats s
             ORDER BY pt.avg_per_deputy DESC
-        `, [expenseType]);
+        `, params);
 
         res.json(analysis);
     } catch (error) {
