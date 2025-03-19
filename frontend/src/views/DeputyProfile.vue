@@ -3,6 +3,7 @@ import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { formatCurrency } from '../utils/formatting'
 import { ArrowLeft, Search } from 'lucide-vue-next'
+import SpendingGauge from '../components/expense-analysis/SpendingGauge.vue'
 
 // Import UI components
 import {
@@ -43,6 +44,7 @@ const filters = ref({
   months: [],
   expenseTypes: []
 })
+const performanceRank = ref(null)
 
 // Form state
 const isLoading = ref(false)
@@ -221,6 +223,8 @@ watch(selectedYear, (newYear) => {
   if (newYear) {
     selectedMonth.value = 'all'
     fetchDeputyData()
+    // Update performance ranking when year changes
+    fetchRankingData()
   }
 })
 
@@ -238,9 +242,45 @@ watch(selectedExpenseType, () => {
   fetchDeputyData()
 })
 
+// Fetch overall ranking data for the performance indicator
+async function fetchRankingData() {
+  try {
+    // Use year param if we have it
+    const yearParam = selectedYear.value ? `?year=${selectedYear.value}` : '';
+    
+    // Get expenses analysis with all expense types to see how this deputy ranks overall
+    const response = await fetch(`${API_URL}/expenses/analysis${yearParam}`);
+    if (!response.ok) throw new Error('Failed to fetch ranking data');
+    
+    const data = await response.json();
+    console.log(`Fetched ${data.length} deputies for ranking`);
+    
+    // Only process if we have deputy data
+    if (data.length > 0 && deputy.value) {
+      // Find this deputy in the overall ranking
+      const currentDeputy = data.find(d => d.id === Number(route.params.id));
+      
+      if (currentDeputy) {
+        console.log('Found current deputy in ranking data:', currentDeputy.name);
+        
+        // We'll leave the detailed analysis to the compute function
+        console.log(`Calculating ranking for ${currentDeputy.name} among ${data.length} deputies...`);
+        
+        // Calculate performance metrics
+        computePerformanceRank(currentDeputy, data);
+      } else {
+        console.error(`Deputy with ID ${route.params.id} not found in ranking data`);
+      }
+    }
+  } catch (error) {
+    console.error('Error fetching ranking data:', error);
+  }
+}
+
 // Initial data fetch
 onMounted(() => {
   fetchDeputyData()
+  fetchRankingData()
 })
 
 // Format date helper
@@ -263,6 +303,113 @@ function goBack() {
 const totalExpenditure = computed(() => {
   return filteredExpenses.value.reduce((total, expense) => total + expense.net_value, 0)
 })
+
+// Calculate performance rank - completely rewritten to ensure correct ranking
+function computePerformanceRank(currentDeputy, allDeputies) {
+  console.log("COMPUTING RANK FOR:", currentDeputy.name);
+
+  console.log("ALL DEPUTIES:", allDeputies);
+  
+  // First, calculate monthly average for all deputies
+  const deputiesWithMonthlyAvg = allDeputies.map(d => {
+    const monthlyAvg = d.months_with_expenses > 0 
+      ? d.total_spent / d.months_with_expenses 
+      : 0;
+    
+    return {
+      ...d,
+      monthlyAvg
+    };
+  });
+  
+  // Sort by monthly average - BUT REVERSE IT - higher values first
+  // We want rank 1 to be highest spender (worst)
+  const sortedByMonthly = [...deputiesWithMonthlyAvg].sort((a, b) => b.monthlyAvg - a.monthlyAvg);
+  
+  // Sort by total spent - higher values first
+  const sortedByTotal = [...deputiesWithMonthlyAvg].sort((a, b) => b.total_spent - a.total_spent);
+
+  console.log("SORTED BY MONTHLY:", sortedByMonthly);
+  console.log("SORTED BY TOTAL:", sortedByTotal);
+  
+  // Find this deputy in each sorted list
+  const monthlyRank = sortedByMonthly.findIndex(d => d.id === currentDeputy.id) + 1;
+  const totalRank = sortedByTotal.findIndex(d => d.id === currentDeputy.id) + 1;
+
+  console.log("MONTHLY RANK:", monthlyRank);
+  console.log("TOTAL RANK:", totalRank);
+  
+  // Total number of deputies
+  const totalDeputies = allDeputies.length;
+  
+  // Log for debugging - top 3 highest spenders
+  console.log("TOP 3 HIGHEST MONTHLY SPENDERS:");
+  sortedByMonthly.slice(0, 3).forEach((d, i) => {
+    console.log(`${i+1}. ${d.name}: R$${d.monthlyAvg.toFixed(2)} per month`);
+  });
+  
+  // Log for debugging - bottom 3 lowest spenders
+  console.log("TOP 3 LOWEST MONTHLY SPENDERS:");
+  sortedByMonthly.slice(-3).forEach((d, i) => {
+    const rank = totalDeputies - 2 + i;
+    console.log(`${rank}. ${d.name}: R$${d.monthlyAvg.toFixed(2)} per month`);
+  });
+  
+  // Calculate percentile where 100 = worst (highest spending), 0 = best (lowest spending)
+  // This makes more intuitive sense for the gauge (right = bad, left = good)
+  const monthlyPercentile = Math.round((monthlyRank / totalDeputies) * 100);
+  const totalPercentile = Math.round((totalRank / totalDeputies) * 100);
+
+  console.log("MONTHLY RANK:", monthlyRank);
+  console.log("TOTAL RANK:", totalRank);
+  console.log("MONTHLY PERCENTILE:", monthlyPercentile, "TOTAL PERCENTILE:", totalPercentile);
+  
+  // Log this deputy's ranks
+  console.log(`${currentDeputy.name}'s ranks:`, {
+    monthlyRank,
+    monthlyAvg: currentDeputy.months_with_expenses > 0 
+      ? currentDeputy.total_spent / currentDeputy.months_with_expenses 
+      : 0,
+    totalRank,
+    totalSpent: currentDeputy.total_spent,
+    monthlyPercentile,
+    totalPercentile
+  });
+  
+  // Determine if deputy is good or bad spender
+  const isGood = monthlyRank > totalDeputies / 2;
+  
+  // Generate text description
+  let rankText = '';
+  if (isGood) {
+    // Lower spenders (bottom half of list = good)
+    const goodRank = totalDeputies - monthlyRank + 1;
+    rankText = `${goodRank}º melhor em economia (gasto mensal)`;
+  } else {
+    // Higher spenders (top half of list = bad)
+    rankText = `${monthlyRank}º pior em economia (gasto mensal)`;
+  }
+  
+  // Add total for context
+  rankText += ` de ${totalDeputies} deputados`;
+  
+  // Create result object
+  performanceRank.value = {
+    // Ranks
+    monthlyRank,
+    totalRank,
+    totalDeputies,
+    
+    // For gauge: we use the calculated percentile directly
+    // Since we sorted with highest spenders first, this gives us
+    // 100 = worst (highest spending), 0 = best (lowest spending)
+    gaugePercentile: 100 - monthlyPercentile,
+    
+    // For display
+    text: rankText,
+    isGood
+  };
+}
 
 // Format expense type to be camelCase (capitalize each word)
 function formatExpenseType(type) {
@@ -360,6 +507,23 @@ function getMonthName(month) {
                       {{ deputy.email }}
                     </a>
                   </p>
+                  
+                  <!-- Performance indicator with gauge -->
+                  <div v-if="performanceRank" class="mt-4 pt-4 border-t border-gray-200">
+                    <div class="flex items-center mb-2">
+                      <h4 class="font-medium">{{ performanceRank.text }}</h4>
+                    </div>
+                    <SpendingGauge 
+                      :percentile="performanceRank.gaugePercentile"
+                      :labels="{
+                        excellent: 'Gasto Muito Baixo',
+                        good: 'Gasto Baixo',
+                        average: 'Gasto Médio',
+                        poor: 'Gasto Alto',
+                        terrible: 'Gasto Muito Alto'
+                      }"
+                    />
+                  </div>
                 </div>
               </div>
             </div>

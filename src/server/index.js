@@ -51,7 +51,7 @@ app.get('/api/expenses/analysis', async (req, res) => {
         const conditions = [];
         const params = [];
         
-        if (expenseType !== 'all') {
+        if (expenseType !== 'all' && expenseType) {
             conditions.push('e.expense_type = ?');
             params.push(expenseType);
         }
@@ -147,7 +147,7 @@ app.get('/api/expenses/party-analysis', async (req, res) => {
         let expenseFilter = '';
         
         // Build filter conditions
-        if (expenseType !== 'all') {
+        if (expenseType !== 'all' && expenseType) {
             expenseFilter = 'AND e.expense_type = ?';
             params.push(expenseType);
         }
@@ -237,7 +237,7 @@ app.get('/api/expenses/state-analysis', async (req, res) => {
         let expenseFilter = '';
         
         // Build filter conditions
-        if (expenseType !== 'all') {
+        if (expenseType !== 'all' && expenseType) {
             expenseFilter = 'AND e.expense_type = ?';
             params.push(expenseType);
         }
