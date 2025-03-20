@@ -1,3 +1,0 @@
-curl -X 'GET' \
-  'https://dadosabertos.camara.leg.br/api/v2/deputados?idLegislatura=57&ordem=ASC&ordenarPor=nome' \
-  -H 'accept: application/json'

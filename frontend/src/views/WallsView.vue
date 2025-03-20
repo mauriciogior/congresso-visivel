@@ -57,6 +57,11 @@ watch(selectedYear, () => {
   fetchDeputiesData()
 })
 
+// Reset search when changing tabs
+watch(activeTab, () => {
+  searchQuery.value = ''
+})
+
 // Update URL when parameters change
 function updateRoute() {
   router.push({ 
@@ -81,19 +86,32 @@ async function fetchDeputiesData() {
   }
 }
 
+// Filter deputies based on search query
+const filteredDeputies = computed(() => {
+  if (!deputies.value.length) return []
+  if (!searchQuery.value.trim()) return deputies.value
+  
+  const query = searchQuery.value.toLowerCase().trim()
+  return deputies.value.filter(deputy => 
+    deputy.name.toLowerCase().includes(query) || 
+    deputy.party.toLowerCase().includes(query) || 
+    deputy.state.toLowerCase().includes(query)
+  )
+})
+
 // Computed properties for wall of shame (highest spenders)
 const wallOfShame = computed(() => {
-  if (!deputies.value.length) return []
-  return deputies.value
+  if (!filteredDeputies.value.length) return []
+  return filteredDeputies.value
     .sort((a, b) => b.total_spent - a.total_spent)
     .filter(d => (100 - Math.round((d.total_rank / deputies.value.length) * 100)) > 80)
 })
 
 // Computed properties for wall of respect (lowest spenders)
 const wallOfRespect = computed(() => {
-  if (!deputies.value.length) return []
+  if (!filteredDeputies.value.length) return []
   // Filter out deputies with zero expenses, then take lowest spenders
-  const activeDeputies = deputies.value.filter(d => d.total_spent > 0)
+  const activeDeputies = filteredDeputies.value.filter(d => d.total_spent > 0)
   return activeDeputies
     .sort((a, b) => a.total_spent - b.total_spent)
     .filter(d => (100 - Math.round((d.total_rank / deputies.value.length) * 100)) < 20)
@@ -134,23 +152,42 @@ function formatCurrency(value) {
           <h1 class="text-3xl font-bold text-gray-900">Mural da Transparência</h1>
         </div>
         
-        <!-- Year selector -->
-        <div class="flex items-center space-x-2">
-          <span class="text-sm font-medium text-gray-700">Mandato:</span>
-          <Select v-model="selectedYear">
-            <SelectTrigger class="w-44">
-              <SelectValue :placeholder="selectedYear" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem 
-                v-for="year in availableYears" 
-                :key="year" 
-                :value="year"
-              >
-                {{ year }} - {{ year + 3 }}
-              </SelectItem>
-            </SelectContent>
-          </Select>
+        <div class="flex items-center space-x-4">
+          <!-- Search input -->
+          <div class="relative w-64">
+            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <Search class="h-4 w-4 text-gray-400" />
+            </div>
+            <Input 
+              v-model="searchQuery"
+              placeholder="Buscar parlamentar, partido..." 
+              class="pl-10" 
+            />
+            <div v-if="searchQuery.trim()" 
+              class="absolute inset-y-0 right-0 flex items-center pr-3 cursor-pointer"
+              @click="searchQuery = ''">
+              <span class="h-4 w-4 text-gray-400 hover:text-gray-600">×</span>
+            </div>
+          </div>
+          
+          <!-- Year selector -->
+          <div class="flex items-center space-x-2">
+            <span class="text-sm font-medium text-gray-700">Mandato:</span>
+            <Select v-model="selectedYear">
+              <SelectTrigger class="w-44">
+                <SelectValue :placeholder="selectedYear" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem 
+                  v-for="year in availableYears" 
+                  :key="year" 
+                  :value="year"
+                >
+                  {{ year }} - {{ year + 3 }}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
       </div>
       
@@ -181,9 +218,14 @@ function formatCurrency(value) {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p class="text-gray-500 mb-4">
-                Parlamentares com os maiores gastos totais durante o mandato selecionado.
-              </p>
+              <div class="flex justify-between items-center mb-4">
+                <p class="text-gray-500">
+                  Parlamentares com os maiores gastos totais durante o mandato selecionado.
+                </p>
+                <p v-if="searchQuery.trim()" class="text-sm text-gray-500">
+                  {{ wallOfShame.length }} resultados encontrados para "{{ searchQuery }}"
+                </p>
+              </div>
               <Table v-if="wallOfShame.length > 0">
                 <TableHeader>
                   <TableRow>
@@ -246,9 +288,14 @@ function formatCurrency(value) {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p class="text-gray-500 mb-4">
-                Parlamentares com os menores gastos totais durante o mandato selecionado.
-              </p>
+              <div class="flex justify-between items-center mb-4">
+                <p class="text-gray-500">
+                  Parlamentares com os menores gastos totais durante o mandato selecionado.
+                </p>
+                <p v-if="searchQuery.trim()" class="text-sm text-gray-500">
+                  {{ wallOfRespect.length }} resultados encontrados para "{{ searchQuery }}"
+                </p>
+              </div>
               <Table v-if="wallOfRespect.length > 0">
                 <TableHeader>
                   <TableRow>

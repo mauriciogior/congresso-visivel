@@ -518,10 +518,10 @@ function computePerformanceRank(currentDeputy, allDeputies) {
   if (isGood) {
     // Lower spenders (bottom half of list = good)
     const goodRank = totalDeputies - monthlyRank + 1;
-    rankText = `${goodRank}º melhor em economia (gasto mensal)`;
+    rankText = `${goodRank}º melhor em economia`;
   } else {
     // Higher spenders (top half of list = bad)
-    rankText = `${monthlyRank}º pior em economia (gasto mensal)`;
+    rankText = `${monthlyRank}º pior em economia`;
   }
   
   // Add total for context
