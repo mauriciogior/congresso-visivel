@@ -1,0 +1,26 @@
+{
+  "name": "camara",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "migrations": "node src/migrations/run-migrations.js",
+    "start": "node src/server/index.js",
+    "scrape-cnpj": "node src/scrapper-cnpj.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "dependencies": {
+    "cheerio": "^1.0.0",
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "node-fetch": "^3.3.2",
+    "redis": "^4.7.0",
+    "sqlite": "^5.1.1",
+    "sqlite3": "^5.1.7",
+    "vue-router": "^4.5.0"
+  }
+}
