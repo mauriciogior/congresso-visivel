@@ -1,6 +1,7 @@
 import fetch from 'node-fetch';
 import sqlite3 from 'sqlite3';
 import { open } from 'sqlite';
+import redis from 'redis';
 
 // Base URL for the API
 const BASE_URL = 'https://dadosabertos.camara.leg.br/api/v2';
@@ -179,9 +180,33 @@ async function getLastProcessedPage(db, deputyId) {
     return row ? row.last_page : 0;
 }
 
+// Initialize Redis client
+async function initializeRedis() {
+    const redisClient = redis.createClient({
+        url: process.env.REDIS_URL || 'redis://localhost:6379'
+    });
+
+    redisClient.on('error', (err) => console.error('Redis error:', err));
+    redisClient.on('connect', () => console.log('Connected to Redis'));
+
+    await redisClient.connect();
+    return redisClient;
+}
+
+// Clear Redis cache
+async function clearRedisCache(redisClient) {
+    try {
+        await redisClient.flushAll();
+        console.log('Redis cache cleared successfully');
+    } catch (error) {
+        console.error('Error clearing Redis cache:', error);
+    }
+}
+
 // Main function
 async function main() {
     const db = await initializeDB();
+    const redisClient = await initializeRedis();
 
     const legislatures = [ 56, 57 ];
 
@@ -270,7 +295,14 @@ async function main() {
         }
     }
 
+    // Clear Redis cache after all data has been processed
+    console.log('Data processing complete. Clearing Redis cache...');
+    await clearRedisCache(redisClient);
+    
+    // Close connections
+    await redisClient.disconnect();
     await db.close();
+    console.log('All connections closed. Process complete.');
 }
 
 main().catch(console.error); 

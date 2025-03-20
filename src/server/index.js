@@ -2,10 +2,24 @@ import express from 'express';
 import sqlite3 from 'sqlite3';
 import { open } from 'sqlite';
 import cors from 'cors';
+import redis from 'redis';
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+// Initialize Redis client
+const redisClient = redis.createClient({
+    url: process.env.REDIS_URL || 'redis://localhost:6379'
+});
+
+redisClient.on('error', (err) => console.error('Redis error:', err));
+redisClient.on('connect', () => console.log('Connected to Redis'));
+
+// Connect to Redis
+(async () => {
+    await redisClient.connect();
+})();
 
 
 const db = await open({
@@ -16,13 +30,28 @@ const db = await open({
 // Get all expense types
 app.get('/api/expense-types', async (req, res) => {
     try {
+        // Check cache first
+        const cacheKey = 'expense-types';
+        const cachedData = await redisClient.get(cacheKey);
+        
+        if (cachedData) {
+            return res.json(JSON.parse(cachedData));
+        }
+        
+        // If not in cache, fetch from database
         const types = await db.all(`
             SELECT DISTINCT expense_type 
             FROM expenses 
             WHERE expense_type IS NOT NULL
             ORDER BY expense_type
         `);
-        res.json(types.map(t => ({ expense_type: t.expense_type })));
+        
+        const result = types.map(t => ({ expense_type: t.expense_type }));
+        
+        // Store in cache (no expiration)
+        await redisClient.set(cacheKey, JSON.stringify(result));
+        
+        res.json(result);
     } catch (error) {
         console.error('Error fetching expense types:', error);
         res.status(500).json({ error: error.message });
@@ -32,13 +61,27 @@ app.get('/api/expense-types', async (req, res) => {
 // Get all deputies
 app.get('/api/deputies', async (req, res) => {
     try {
+        // Check cache first
+        const cacheKey = 'deputies';
+        const cachedData = await redisClient.get(cacheKey);
+        
+        if (cachedData) {
+            return res.json(JSON.parse(cachedData));
+        }
+        
+        // If not in cache, fetch from database
         const deputies = await db.all(`
             SELECT id, name, party, state, slug
             FROM deputies 
             ORDER BY name
         `);
+        
+        // Store in cache (no expiration)
+        await redisClient.set(cacheKey, JSON.stringify(deputies));
+        
         res.json(deputies);
     } catch (error) {
+        console.error('Error fetching deputies:', error);
         res.status(500).json({ error: error.message });
     }
 });
@@ -48,6 +91,15 @@ app.get('/api/expenses/analysis', async (req, res) => {
     const { expenseType, year } = req.query;
     
     try {
+        // Check cache first
+        const cacheKey = `analysis:${expenseType || 'all'}:${year || 'all'}`;
+        const cachedData = await redisClient.get(cacheKey);
+        
+        if (cachedData) {
+            return res.json(JSON.parse(cachedData));
+        }
+        
+        // If not in cache, fetch from database
         const conditions = [];
         const params = [];
         
@@ -174,8 +226,12 @@ app.get('/api/expenses/analysis', async (req, res) => {
             ORDER BY total_spent DESC
         `, params);
 
+        // Store in cache (no expiration)
+        await redisClient.set(cacheKey, JSON.stringify(analysis));
+        
         res.json(analysis);
     } catch (error) {
+        console.error('Analysis error:', error);
         res.status(500).json({ error: error.message });
     }
 });
@@ -185,6 +241,15 @@ app.get('/api/expenses/party-analysis', async (req, res) => {
     const { expenseType, year } = req.query;
     
     try {
+        // Check cache first
+        const cacheKey = `party-analysis:${expenseType || 'all'}:${year || 'all'}`;
+        const cachedData = await redisClient.get(cacheKey);
+        
+        if (cachedData) {
+            return res.json(JSON.parse(cachedData));
+        }
+        
+        // If not in cache, fetch from database
         const params = [];
         let expenseFilter = '';
         
@@ -285,6 +350,10 @@ app.get('/api/expenses/party-analysis', async (req, res) => {
         `;
         
         const analysis = await db.all(query, params);
+        
+        // Store in cache (no expiration)
+        await redisClient.set(cacheKey, JSON.stringify(analysis));
+        
         res.json(analysis);
     } catch (error) {
         console.error('Party analysis error:', error);
@@ -297,6 +366,15 @@ app.get('/api/expenses/state-analysis', async (req, res) => {
     const { expenseType, year } = req.query;
     
     try {
+        // Check cache first
+        const cacheKey = `state-analysis:${expenseType || 'all'}:${year || 'all'}`;
+        const cachedData = await redisClient.get(cacheKey);
+        
+        if (cachedData) {
+            return res.json(JSON.parse(cachedData));
+        }
+        
+        // If not in cache, fetch from database
         const params = [];
         let expenseFilter = '';
         
@@ -397,6 +475,10 @@ app.get('/api/expenses/state-analysis', async (req, res) => {
         `;
         
         const analysis = await db.all(query, params);
+        
+        // Store in cache (no expiration)
+        await redisClient.set(cacheKey, JSON.stringify(analysis));
+        
         res.json(analysis);
     } catch (error) {
         console.error('State analysis error:', error);
@@ -410,6 +492,15 @@ app.get('/api/deputy/:slugOrId', async (req, res) => {
     const { expenseType, year, month } = req.query;
     
     try {
+        // Check cache first
+        const cacheKey = `deputy:${slugOrId}:${expenseType || 'all'}:${year || 'all'}:${month || 'all'}`;
+        const cachedData = await redisClient.get(cacheKey);
+        
+        if (cachedData) {
+            return res.json(JSON.parse(cachedData));
+        }
+        
+        // If not in cache, fetch from database
         // Check if the parameter is an ID (numeric) or a slug (name-based)
         const isId = /^\d+$/.test(slugOrId);
         
@@ -548,7 +639,7 @@ app.get('/api/deputy/:slugOrId', async (req, res) => {
             ORDER BY expense_type
         `, [deputy.id]);
         
-        res.json({
+        const result = {
             deputy,
             expenses,
             filters: {
@@ -556,7 +647,12 @@ app.get('/api/deputy/:slugOrId', async (req, res) => {
                 months: months.map(m => m.month),
                 expenseTypes: types.map(t => t.expense_type)
             }
-        });
+        };
+        
+        // Store in cache (no expiration)
+        await redisClient.set(cacheKey, JSON.stringify(result));
+        
+        res.json(result);
     } catch (error) {
         console.error('Error fetching deputy details:', error);
         res.status(500).json({ error: error.message });
