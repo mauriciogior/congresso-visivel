@@ -97,23 +97,23 @@ const emit = defineEmits([
         </div>
 
         <div class="space-y-2">
-          <label class="text-sm font-medium">Ano</label>
+          <label class="text-sm font-medium">Mandato</label>
           <Select 
             :model-value="selectedYear.toString()"
             @update:model-value="emit('update:selectedYear', parseInt($event))"
           >
             <SelectTrigger class="w-full">
-              <SelectValue placeholder="Selecione um ano" />
+              <SelectValue placeholder="Selecione um mandato" />
             </SelectTrigger>
             <SelectContent>
               <SelectGroup>
-                <SelectLabel>Anos Disponíveis</SelectLabel>
+                <SelectLabel>Mandatos Disponíveis</SelectLabel>
                 <SelectItem 
                   v-for="year in availableYears" 
                   :key="year" 
                   :value="year.toString()"
                 >
-                  {{ year }}
+                  {{ year }} - {{ year + 3 }}
                 </SelectItem>
               </SelectGroup>
             </SelectContent>

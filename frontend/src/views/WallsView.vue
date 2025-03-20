@@ -5,7 +5,10 @@ import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../components/ui/select'
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '../components/ui/table'
+import { Button } from '../components/ui/button'
+import { Input } from '../components/ui/input'
 import SpendingGauge from '../components/expense-analysis/SpendingGauge.vue'
+import { ArrowLeft, Search } from 'lucide-vue-next'
 
 const route = useRoute()
 const router = useRouter()
@@ -16,14 +19,23 @@ const API_URL = 'http://localhost:3002/api'
 const deputies = ref([])
 const isLoading = ref(false)
 
-// Year handling
+// Mandate filtering (legislatures: 2019-2022, 2023-2026, etc.)
 const currentYear = new Date().getFullYear()
-const selectedYear = ref(currentYear)
-const availableYears = ref([...Array(currentYear - 2018)].map((_, i) => currentYear - i))
+// Calculate the start year of the current legislature (2019, 2023, 2027...)
+const currentLegislatureStartYear = currentYear - ((currentYear - 2019) % 4)
+const selectedYear = ref(currentLegislatureStartYear)
+// Create array of available legislature start years (2019, 2023, etc.)
+const availableYears = ref([])
+
+// Initialize available years for legislatures
+for (let year = 2019; year <= currentYear; year += 4) {
+  availableYears.value.push(year)
+}
 
 // For display
 const activeTab = ref('shame')
-const TOP_COUNT = 40
+const TOP_COUNT = 100
+const searchQuery = ref('')
 
 // OnBeforeMount to set up component based on URL parameters
 onBeforeMount(async () => {
@@ -74,7 +86,7 @@ const wallOfShame = computed(() => {
   if (!deputies.value.length) return []
   return deputies.value
     .sort((a, b) => b.total_spent - a.total_spent)
-    .slice(0, TOP_COUNT)
+    .filter(d => (100 - Math.round((d.total_rank / deputies.value.length) * 100)) > 80)
 })
 
 // Computed properties for wall of respect (lowest spenders)
@@ -84,7 +96,7 @@ const wallOfRespect = computed(() => {
   const activeDeputies = deputies.value.filter(d => d.total_spent > 0)
   return activeDeputies
     .sort((a, b) => a.total_spent - b.total_spent)
-    .slice(0, TOP_COUNT)
+    .filter(d => (100 - Math.round((d.total_rank / deputies.value.length) * 100)) < 20)
 })
 
 const averageSpent = computed(() => {
@@ -106,19 +118,27 @@ function formatCurrency(value) {
 <template>
   <div class="min-h-screen bg-gray-100 light">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <!-- Back button -->
+      <router-link to="/expenses/deputies">
+        <Button 
+          variant="outline" 
+          class="mb-4" 
+        >
+          <ArrowLeft class="h-4 w-4 mr-2" />
+          Voltar
+        </Button>
+      </router-link>
+
       <div class="flex justify-between items-center mb-8">
         <div class="flex items-center">
           <h1 class="text-3xl font-bold text-gray-900">Mural da Transparência</h1>
-          <router-link to="/expenses/deputies" class="ml-4 text-blue-600 hover:text-blue-800 flex items-center space-x-1">
-            <span class="text-sm">← Voltar para análise</span>
-          </router-link>
         </div>
         
         <!-- Year selector -->
         <div class="flex items-center space-x-2">
-          <span class="text-sm font-medium text-gray-700">Ano:</span>
+          <span class="text-sm font-medium text-gray-700">Mandato:</span>
           <Select v-model="selectedYear">
-            <SelectTrigger class="w-32">
+            <SelectTrigger class="w-44">
               <SelectValue :placeholder="selectedYear" />
             </SelectTrigger>
             <SelectContent>
@@ -127,7 +147,7 @@ function formatCurrency(value) {
                 :key="year" 
                 :value="year"
               >
-                {{ year }}
+                {{ year }} - {{ year + 3 }}
               </SelectItem>
             </SelectContent>
           </Select>
@@ -157,12 +177,12 @@ function formatCurrency(value) {
           <Card class="mb-8">
             <CardHeader>
               <CardTitle class="text-xl text-red-800">
-                Top {{ TOP_COUNT }} Deputados com Maiores Gastos em {{ selectedYear }}
+                Todos deputados <b>Super Gastões</b> no Mandato {{ selectedYear }} - {{ selectedYear + 3 }}
               </CardTitle>
             </CardHeader>
             <CardContent>
               <p class="text-gray-500 mb-4">
-                Parlamentares com os maiores gastos totais no ano selecionado.
+                Parlamentares com os maiores gastos totais durante o mandato selecionado.
               </p>
               <Table v-if="wallOfShame.length > 0">
                 <TableHeader>
@@ -211,7 +231,7 @@ function formatCurrency(value) {
                 </TableBody>
               </Table>
               <div v-else class="text-center py-8 text-gray-500">
-                Nenhum dado disponível para o ano selecionado.
+                Nenhum dado disponível para o mandato selecionado.
               </div>
             </CardContent>
           </Card>
@@ -222,12 +242,12 @@ function formatCurrency(value) {
           <Card class="mb-8">
             <CardHeader>
               <CardTitle class="text-xl text-green-800">
-                Top {{ TOP_COUNT }} Deputados com Menores Gastos em {{ selectedYear }}
+                Todos deputados <b>Super Econômicos</b> no Mandato {{ selectedYear }} - {{ selectedYear + 3 }}
               </CardTitle>
             </CardHeader>
             <CardContent>
               <p class="text-gray-500 mb-4">
-                Parlamentares com os menores gastos totais no ano selecionado.
+                Parlamentares com os menores gastos totais durante o mandato selecionado.
               </p>
               <Table v-if="wallOfRespect.length > 0">
                 <TableHeader>
@@ -258,7 +278,7 @@ function formatCurrency(value) {
                     <TableCell>{{ deputy.party }}</TableCell>
                     <TableCell class="text-right font-mono">
                       {{ formatCurrency(deputy.total_spent) }}<br>
-                      <span class="text-sm text-green-700">{{ parseFloat(deputy.total_percentage_diff).toFixed(2) }}% abaixo da média</span>
+                      <span class="text-sm text-green-700">{{ Math.abs(parseFloat(deputy.total_percentage_diff)).toFixed(2) }}% abaixo da média</span>
                     </TableCell>
                     <TableCell>
                       <SpendingGauge 
@@ -276,7 +296,7 @@ function formatCurrency(value) {
                 </TableBody>
               </Table>
               <div v-else class="text-center py-8 text-gray-500">
-                Nenhum dado disponível para o ano selecionado.
+                Nenhum dado disponível para o mandato selecionado.
               </div>
             </CardContent>
           </Card>
@@ -285,7 +305,7 @@ function formatCurrency(value) {
       
       <div class="mt-8 text-center">
         <p class="text-sm text-gray-500">
-          Nota: Os rankings são baseados nas despesas parlamentares relatadas no portal da Câmara dos Deputados.
+          Nota: Os rankings são baseados nas despesas parlamentares relatadas no portal da Câmara dos Deputados para deputados titulares no mandato selecionado.
         </p>
       </div>
     </div>

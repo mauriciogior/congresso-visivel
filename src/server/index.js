@@ -56,20 +56,28 @@ app.get('/api/expenses/analysis', async (req, res) => {
             params.push(expenseType);
         }
         if (year) {
-            // Handle election years (2019, 2023, 2027...) - January belongs to previous year
-            const isPostElectionYear = (parseInt(year) - 2019) % 4 === 0;
+            // Filter for the entire mandate (4 years)
+            // Year parameter represents the first year of the mandate (e.g., 2019, 2023, 2027...)
+            const mandateStartYear = parseInt(year);
+            const mandateEndYear = mandateStartYear + 3;
             
-            if (isPostElectionYear) {
-                conditions.push("(e.year = ? AND e.month > 1)");
-                params.push(year);
-            } else if (parseInt(year) % 4 === 3) { // Pre-election year (2018, 2022, 2026...)
-                conditions.push("(e.year = ?) OR (e.year = ? AND e.month = 1)");
-                params.push(year);
-                params.push(parseInt(year) + 1);
-            } else {
-                conditions.push("e.year = ?");
-                params.push(year);
-            }
+            // Include all expenses from the mandate period:
+            // 1. From mandateStartYear (exclude January)
+            // 2. All months from years between start and end
+            // 3. All months from mandateEndYear  
+            // 4. January from the year after mandate ends
+            conditions.push(`(
+                (e.year = ? AND e.month > 1) OR 
+                (e.year > ? AND e.year < ?) OR 
+                (e.year = ?) OR
+                (e.year = ? AND e.month = 1)
+            )`);
+            
+            params.push(mandateStartYear); // startYear with month > 1
+            params.push(mandateStartYear); // startYear for > comparison
+            params.push(mandateEndYear);   // endYear for < comparison
+            params.push(mandateEndYear);   // endYear (all months)
+            params.push(mandateEndYear + 1); // Next year's January
         }
         
         const whereClause = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
@@ -85,23 +93,32 @@ app.get('/api/expenses/analysis', async (req, res) => {
                 FROM expenses e
                 WHERE 1=1 ${whereClause ? whereClause.replace('WHERE ', ' AND ') : ''}
             ),
-            /* First, identify deputies who have ANY expenses in the selected year */
+            /* Get deputies who were "Titular" for the specified legislature */
+            titular_deputies AS (
+                SELECT DISTINCT di.deputy_id, di.title
+                FROM deputies_info di
+                WHERE di.title = 'Titular'
+                ${year ? `AND di.legislature = ${year === '2019' ? 56 : 57}` : ''}
+            ),
+            /* First, identify deputies who have ANY expenses in the selected mandate period AND are Titular */
             active_deputies AS (
-                SELECT DISTINCT e.deputy_id, d.party, d.state
+                SELECT DISTINCT e.deputy_id, d.party, d.state, td.title
                 FROM expenses e
                 JOIN deputies d ON e.deputy_id = d.id
+                JOIN titular_deputies td ON e.deputy_id = td.deputy_id
                 WHERE ${year ? 
-                    (parseInt(year) - 2019) % 4 === 0 ? 
-                    `(e.year = ${year} AND e.month > 1)` : 
-                    parseInt(year) % 4 === 3 ? 
-                    `(e.year = ${year} OR (e.year = ${parseInt(year) + 1} AND e.month = 1))` :
-                    `e.year = ${year}`
-                : '1=1'}
+                    `(
+                        (e.year = ${parseInt(year)} AND e.month > 1) OR 
+                        (e.year > ${parseInt(year)} AND e.year < ${parseInt(year) + 3}) OR 
+                        (e.year = ${parseInt(year) + 3}) OR
+                        (e.year = ${parseInt(year) + 4} AND e.month = 1)
+                    )` : '1=1'}
             ),
             deputy_expenses AS (
                 SELECT 
                     ad.deputy_id as id,
                     d.name,
+                    ad.title,
                     ad.party,
                     ad.state,
                     COALESCE(SUM(fe.net_value), 0) as total_spent,
@@ -124,6 +141,7 @@ app.get('/api/expenses/analysis', async (req, res) => {
                 de.state,
                 d.photo_url,
                 d.slug,
+                de.title,
                 de.total_spent,
                 de.months_with_expenses,
                 CASE 
@@ -181,29 +199,39 @@ app.get('/api/expenses/party-analysis', async (req, res) => {
         let yearCondition = '';
         
         if (yearParam) {
-            // Handle election years (2019, 2023, 2027...)
-            const isPostElectionYear = (parseInt(yearParam) - 2019) % 4 === 0;
+            // Filter for the entire mandate (4 years)
+            const mandateStartYear = parseInt(yearParam);
+            const mandateEndYear = mandateStartYear + 3;
             
-            if (isPostElectionYear) {
-                yearCondition = "AND (e.year = ? AND e.month > 1)";
-                params.push(yearParam);
-            } else if (parseInt(yearParam) % 4 === 3) { // Pre-election year (2018, 2022, 2026...)
-                yearCondition = "AND (e.year = ? OR (e.year = ? AND e.month = 1))";
-                params.push(yearParam);
-                params.push(parseInt(yearParam) + 1);
-            } else {
-                yearCondition = "AND e.year = ?";
-                params.push(yearParam);
-            }
+            yearCondition = `AND (
+                (e.year = ? AND e.month > 1) OR 
+                (e.year > ? AND e.year < ?) OR 
+                (e.year = ?) OR
+                (e.year = ? AND e.month = 1)
+            )`;
+            
+            params.push(mandateStartYear); // startYear with month > 1
+            params.push(mandateStartYear); // startYear for > comparison
+            params.push(mandateEndYear);   // endYear for < comparison
+            params.push(mandateEndYear);   // endYear (all months)
+            params.push(mandateEndYear + 1); // Next year's January
         }
         
         // Create the query with cleaner structure
         const query = `
-            WITH active_deputies AS (
-                -- Get active deputies for the selected year with their party
+            WITH titular_deputies AS (
+                -- Get deputies who were "Titular" for the specified legislature
+                SELECT DISTINCT di.deputy_id
+                FROM deputies_info di
+                WHERE 1=1
+                ${yearParam ? `AND di.legislature = ${yearParam === '2019' ? 56 : 57}` : ''}
+            ),
+            active_deputies AS (
+                -- Get active deputies for the selected mandate with their party who are Titular
                 SELECT DISTINCT e.deputy_id, d.party
                 FROM expenses e
                 JOIN deputies d ON e.deputy_id = d.id
+                JOIN titular_deputies td ON e.deputy_id = td.deputy_id
                 WHERE d.party IS NOT NULL
                 ${yearCondition}
             ),
@@ -283,29 +311,39 @@ app.get('/api/expenses/state-analysis', async (req, res) => {
         let yearCondition = '';
         
         if (yearParam) {
-            // Handle election years (2019, 2023, 2027...)
-            const isPostElectionYear = (parseInt(yearParam) - 2019) % 4 === 0;
+            // Filter for the entire mandate (4 years)
+            const mandateStartYear = parseInt(yearParam);
+            const mandateEndYear = mandateStartYear + 3;
             
-            if (isPostElectionYear) {
-                yearCondition = "AND (e.year = ? AND e.month > 1)";
-                params.push(yearParam);
-            } else if (parseInt(yearParam) % 4 === 3) { // Pre-election year (2018, 2022, 2026...)
-                yearCondition = "AND (e.year = ? OR (e.year = ? AND e.month = 1))";
-                params.push(yearParam);
-                params.push(parseInt(yearParam) + 1);
-            } else {
-                yearCondition = "AND e.year = ?";
-                params.push(yearParam);
-            }
+            yearCondition = `AND (
+                (e.year = ? AND e.month > 1) OR 
+                (e.year > ? AND e.year < ?) OR 
+                (e.year = ?) OR
+                (e.year = ? AND e.month = 1)
+            )`;
+            
+            params.push(mandateStartYear); // startYear with month > 1
+            params.push(mandateStartYear); // startYear for > comparison
+            params.push(mandateEndYear);   // endYear for < comparison
+            params.push(mandateEndYear);   // endYear (all months)
+            params.push(mandateEndYear + 1); // Next year's January
         }
         
         // Create the query with cleaner structure
         const query = `
-            WITH active_deputies AS (
-                -- Get active deputies for the selected year with their state
+            WITH titular_deputies AS (
+                -- Get deputies who were "Titular" for the specified legislature
+                SELECT DISTINCT di.deputy_id
+                FROM deputies_info di
+                WHERE 1=1
+                ${yearParam ? `AND di.legislature = ${yearParam === '2019' ? 56 : 57}` : ''}
+            ),
+            active_deputies AS (
+                -- Get active deputies for the selected mandate with their state who are Titular
                 SELECT DISTINCT e.deputy_id, d.state
                 FROM expenses e
                 JOIN deputies d ON e.deputy_id = d.id
+                JOIN titular_deputies td ON e.deputy_id = td.deputy_id
                 WHERE d.state IS NOT NULL
                 ${yearCondition}
             ),
@@ -377,6 +415,7 @@ app.get('/api/deputy/:slugOrId', async (req, res) => {
         
         // Get deputy details based on ID or slug
         let deputy;
+        
         if (isId) {
             deputy = await db.get(`
                 SELECT id, name, party, state, photo_url, email, slug

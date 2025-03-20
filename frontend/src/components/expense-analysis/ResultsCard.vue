@@ -93,7 +93,7 @@ const currentAverage = computed(() => {
   <Card v-if="selectedExpenseType && (analysis.length || partyAnalysis.length || stateAnalysis.length)">
     <CardHeader>
       <CardTitle>
-        Resultados da Análise {{ selectedYear }} 
+        Resultados da Análise {{ selectedYear }} - {{ selectedYear + 3 }}
         <span v-if="selectedExpenseType && selectedExpenseType !== 'all'" class="font-normal text-gray-500 text-sm ml-2">
           ({{ toCamelCase(selectedExpenseType) }})
         </span>

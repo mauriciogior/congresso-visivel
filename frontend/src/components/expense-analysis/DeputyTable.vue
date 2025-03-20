@@ -255,6 +255,10 @@ const sortedDeputies = computed(() => {
             >
               {{ deputy.name }}
             </router-link>
+            <br>
+            <span class="text-gray-500 text-sm">
+              {{ deputy.title }}
+            </span>
           </TableCell>
           <TableCell class="text-gray-500">{{ deputy.party }}/{{ deputy.state }}</TableCell>
           <TableCell>

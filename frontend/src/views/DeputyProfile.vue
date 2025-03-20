@@ -49,9 +49,12 @@ const performanceRank = ref(null)
 // Form state
 const isLoading = ref(false)
 const selectedExpenseType = ref(route.params.expenseType || 'all')
-const selectedYear = ref(route.query.year || '')
+// Convert year to string to ensure it works consistently with the Select component
+const selectedYear = ref(parseInt(route.query.year ? String(route.query.year) : ''))
 const selectedMonth = ref(route.query.month || 'all')
 const searchQuery = ref('')
+
+console.log('Selected year:', selectedYear.value, route.query.year)
 
 // Sort state
 const sortColumn = ref('document_date')
@@ -156,7 +159,8 @@ async function fetchDeputyData() {
     
     // Set default year if not already set from URL params
     if (!selectedYear.value && filters.value.years.length > 0) {
-      selectedYear.value = filters.value.years[0]
+      // Convert to string to ensure consistency with Select component
+      selectedYear.value = String(filters.value.years[0])
       updateUrlParams() // Update URL with the default year
     }
     

@@ -25,10 +25,18 @@ const stateSearchQuery = ref('')
 const stateAnalysis = ref([])
 const isLoading = ref(false)
 
-// Year filtering
+// Mandate filtering (legislatures: 2019-2022, 2023-2026, etc.)
 const currentYear = new Date().getFullYear()
-const selectedYear = ref(currentYear)
-const availableYears = ref([...Array(currentYear - 2018)].map((_, i) => currentYear - i))
+// Calculate the start year of the current legislature (2019, 2023, 2027...)
+const currentLegislatureStartYear = currentYear - ((currentYear - 2019) % 4)
+const selectedYear = ref(currentLegislatureStartYear)
+// Create array of available legislature start years (2019, 2023, etc.)
+const availableYears = ref([])
+
+// Initialize available years for legislatures
+for (let year = 2019; year <= currentYear; year += 4) {
+  availableYears.value.push(year)
+}
 
 // Set the view based on the route parameter
 onBeforeMount(async () => {
