@@ -2,6 +2,7 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { formatCurrency, slugify, toCamelCase } from '../utils/formatting'
+import { apiUrl } from '../lib/utils'
 import { ArrowLeft, Search } from 'lucide-vue-next'
 import SpendingGauge from '../components/expense-analysis/SpendingGauge.vue'
 
@@ -34,7 +35,6 @@ import {
 
 const route = useRoute()
 const router = useRouter()
-const API_URL = 'http://localhost:3002/api'
 
 // Data
 const deputy = ref(null)
@@ -106,7 +106,7 @@ async function fetchDeputyData() {
       console.log('Month filter applied:', formattedMonth)
     }
     
-    const requestUrl = `${API_URL}/deputy/${route.params.slug}?${params.toString()}`
+    const requestUrl = `${apiUrl}/deputy/${route.params.slug}?${params.toString()}`
     console.log('Fetching from:', requestUrl)
     
     const response = await fetch(requestUrl)
@@ -351,7 +351,7 @@ async function fetchRankingData() {
     const yearParam = selectedYear.value ? `?year=${selectedYear.value}` : '';
     
     // Get expenses analysis with all expense types to see how this deputy ranks overall
-    const response = await fetch(`${API_URL}/expenses/analysis${yearParam}`);
+    const response = await fetch(`${apiUrl}/expenses/analysis${yearParam}`);
     if (!response.ok) throw new Error('Failed to fetch ranking data');
     
     const data = await response.json();

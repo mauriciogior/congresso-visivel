@@ -9,11 +9,10 @@ import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import SpendingGauge from '../components/expense-analysis/SpendingGauge.vue'
 import { ArrowLeft, Search } from 'lucide-vue-next'
+import { apiUrl } from '../lib/utils'
 
 const route = useRoute()
 const router = useRouter()
-
-const API_URL = 'http://localhost:3002/api'
 
 // Data refs
 const deputies = ref([])
@@ -76,7 +75,7 @@ async function fetchDeputiesData() {
   
   try {
     const response = await fetch(
-      `${API_URL}/expenses/analysis?expenseType=all&year=${selectedYear.value}`
+      `${apiUrl}/expenses/analysis?expenseType=all&year=${selectedYear.value}`
     )
     deputies.value = await response.json()
   } catch (error) {

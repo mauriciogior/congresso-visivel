@@ -2,6 +2,7 @@
 import { ref, computed, watch, onBeforeMount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { slugify } from '../utils/formatting'
+import { apiUrl } from '../lib/utils'
 
 // Import custom components
 import ViewSelector from '../components/expense-analysis/ViewSelector.vue'
@@ -10,8 +11,6 @@ import ResultsCard from '../components/expense-analysis/ResultsCard.vue'
 
 const route = useRoute()
 const router = useRouter()
-
-const API_URL = 'http://localhost:3002/api'
 
 const currentView = ref('deputies')
 const expenseTypes = ref([])
@@ -209,7 +208,7 @@ const filteredStateAnalysis = computed(() => {
 })
 
 async function fetchExpenseTypes() {
-  const response = await fetch(`${API_URL}/expense-types`)
+  const response = await fetch(`${apiUrl}/expense-types`)
   expenseTypes.value = await response.json()
   
   // Create slug mappings for all expense types
@@ -241,17 +240,17 @@ async function fetchAnalysis() {
     
     if (currentView.value === 'deputies') {
       const response = await fetch(
-        `${API_URL}/expenses/analysis?expenseType=${expenseTypeParam}${yearParam}`
+        `${apiUrl}/expenses/analysis?expenseType=${expenseTypeParam}${yearParam}`
       )
       analysis.value = await response.json()
     } else if (currentView.value === 'parties') {
       const response = await fetch(
-        `${API_URL}/expenses/party-analysis?expenseType=${expenseTypeParam}${yearParam}`
+        `${apiUrl}/expenses/party-analysis?expenseType=${expenseTypeParam}${yearParam}`
       )
       partyAnalysis.value = await response.json()
     } else {
       const response = await fetch(
-        `${API_URL}/expenses/state-analysis?expenseType=${expenseTypeParam}${yearParam}`
+        `${apiUrl}/expenses/state-analysis?expenseType=${expenseTypeParam}${yearParam}`
       )
       stateAnalysis.value = await response.json()
     }
