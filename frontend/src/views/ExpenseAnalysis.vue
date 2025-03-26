@@ -284,7 +284,10 @@ watch([selectedExpenseType, currentView, selectedYear], fetchAnalysis)
       <Card class="mb-6">
         <CardContent class="pt-6">
           <h2 class="mb-2">
-            Dados obtidos através da API de Dados Abertos da Câmara dos Deputados. Em breve teremos dados do Senado Federal.<br>Link: <a href="https://dadosabertos.camara.leg.br/swagger/api.html" class="text-blue-500 hover:text-blue-700">https://dadosabertos.camara.leg.br/swagger/api.html</a>
+            Dados obtidos através da API de Dados Abertos da Câmara dos Deputados. Em breve teremos dados do Senado Federal.
+            <br>Link da API: <a href="https://dadosabertos.camara.leg.br/swagger/api.html" class="text-blue-500 hover:text-blue-700">https://dadosabertos.camara.leg.br/swagger/api.html</a>
+            <br>
+            <br> Dúvidas ou sugestões: <a href="https://x.com/mauriciogior" target="_blank" class="text-blue-500 hover:text-blue-700">@mauriciogior</a>
           </h2>
           <p class="text-sm text-gray-500 italic">
             Dados atualizados até 18/03/2025
