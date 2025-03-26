@@ -8,6 +8,10 @@ import { apiUrl } from '../lib/utils'
 import ViewSelector from '../components/expense-analysis/ViewSelector.vue'
 import FilterSection from '../components/expense-analysis/FilterSection.vue'
 import ResultsCard from '../components/expense-analysis/ResultsCard.vue'
+import Card from '../components/ui/card/Card.vue';
+import CardHeader from '../components/ui/card/CardHeader.vue';
+import CardTitle from '../components/ui/card/CardTitle.vue';
+import CardContent from '../components/ui/card/CardContent.vue';
 
 const route = useRoute()
 const router = useRouter()
@@ -271,11 +275,22 @@ watch([selectedExpenseType, currentView, selectedYear], fetchAnalysis)
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div class="flex justify-between items-center mb-8">
         <h1 class="text-3xl font-bold text-gray-900">Análise de Despesas Parlamentares</h1>
-        <router-link to="/walls" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md flex items-center space-x-2">
+        <router-link to="/walls" class="bg-slate-100 hover:bg-slate-200 text-blue-600 border border-blue-600 px-4 py-2 rounded-md flex items-center space-x-2">
           <span>Mural da Transparência</span>
           <span class="text-sm">🔍</span>
         </router-link>
       </div>
+
+      <Card class="mb-6">
+        <CardContent class="pt-6">
+          <h2 class="mb-2">
+            Dados obtidos através da API de Dados Abertos da Câmara dos Deputados.<br>Link: <a href="https://dadosabertos.camara.leg.br/swagger/api.html" class="text-blue-500 hover:text-blue-700">https://dadosabertos.camara.leg.br/swagger/api.html</a>
+          </h2>
+          <p class="text-sm text-gray-500 italic">
+            Dados atualizados até 18/03/2025
+          </p>
+        </CardContent>
+      </Card>
       
       <!-- View Toggle -->
       <ViewSelector 
