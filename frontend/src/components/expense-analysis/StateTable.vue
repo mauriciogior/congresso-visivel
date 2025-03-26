@@ -140,7 +140,7 @@ const sortedStates = computed(() => {
             class="cursor-pointer hover:bg-gray-50"
           >
             <div class="flex items-center">
-              Total no ano
+              Total no mandato
               <component :is="getSortIcon('total')" class="ml-1 h-4 w-4" v-if="sortColumn === 'total'" />
             </div>
           </TableHead>

@@ -525,7 +525,7 @@ function computePerformanceRank(currentDeputy, allDeputies) {
   }
   
   // Add total for context
-  rankText += ` de ${totalDeputies} deputados`;
+  rankText += ` de ${totalDeputies} deputados em ${selectedYear.value}`;
   
   // Create result object
   performanceRank.value = {
@@ -643,11 +643,11 @@ function getMonthName(month) {
                   </p>
                   
                   <!-- Performance indicator with gauge -->
-                  <div v-if="performanceRank" class="mt-4 pt-4 border-t border-gray-200">
+                  <div v-if="performanceRank && !isLoading" class="mt-4 pt-4 border-t border-gray-200">
                     <div class="flex items-center mb-2">
                       <h4 class="font-medium">{{ performanceRank.text }}</h4>
                     </div>
-                    <SpendingGauge 
+                    <SpendingGauge
                       :percentile="performanceRank.gaugePercentile"
                       :labels="{
                         excellent: 'Gasto Muito Baixo',
@@ -657,6 +657,12 @@ function getMonthName(month) {
                         terrible: 'Gasto Muito Alto'
                       }"
                     />
+                  </div>
+                  <!-- Performance indicator with gauge -->
+                  <div v-else-if="isLoading" class="mt-4 pt-4 border-t border-gray-200">
+                    <div class="flex items-center mb-2">
+                      <div class="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                    </div>
                   </div>
                 </div>
               </div>

@@ -98,6 +98,11 @@ const filteredDeputies = computed(() => {
   )
 })
 
+// Check if the mandate is ongoing
+const isMandateOngoing = computed(() => {
+  return selectedYear.value + 3 > currentYear
+})
+
 // Computed properties for wall of shame (highest spenders)
 const wallOfShame = computed(() => {
   if (!filteredDeputies.value.length) return []
@@ -198,7 +203,7 @@ function formatCurrency(value) {
             <span class="ml-2 text-sm text-red-500">🔥</span>
           </TabsTrigger>
           <TabsTrigger value="respect" class="text-lg">
-            Mural do Respeito
+            Mural da Austeridade
             <span class="ml-2 text-sm text-green-500">🌱</span>
           </TabsTrigger>
         </TabsList>
@@ -214,6 +219,9 @@ function formatCurrency(value) {
             <CardHeader>
               <CardTitle class="text-xl text-red-800">
                 Todos deputados <b>Super Gastões</b> no Mandato {{ selectedYear }} - {{ selectedYear + 3 }}
+                <p v-if="isMandateOngoing" class="text-sm text-gray-500">
+                  (Mandato ainda em andamento, dados limitados)
+                </p>
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -284,6 +292,9 @@ function formatCurrency(value) {
             <CardHeader>
               <CardTitle class="text-xl text-green-800">
                 Todos deputados <b>Super Econômicos</b> no Mandato {{ selectedYear }} - {{ selectedYear + 3 }}
+                <p v-if="isMandateOngoing" class="text-sm text-gray-500">
+                  (Mandato ainda em andamento, dados limitados)
+                </p>
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -308,7 +319,7 @@ function formatCurrency(value) {
                 </TableHeader>
                 <TableBody>
                   <TableRow v-for="deputy in wallOfRespect" :key="deputy.id">
-                    <TableCell class="font-medium">#{{ deputy.total_rank }}</TableCell>
+                    <TableCell class="font-medium">#{{ wallOfRespect.indexOf(deputy) + 1 }}</TableCell>
                     <TableCell>
                       <div class="flex items-center space-x-2">
                         <img :src="deputy.photo_url" class="w-24 h-24 rounded-lg object-cover">

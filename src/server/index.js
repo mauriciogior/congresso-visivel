@@ -21,11 +21,62 @@ redisClient.on('connect', () => console.log('Connected to Redis'));
     await redisClient.connect();
 })();
 
-
 const db = await open({
     filename: '../deputies.db',
     driver: sqlite3.Database
 });
+
+const withTitularDeputiesSql = (year) => `
+    titular_deputies AS (
+        SELECT DISTINCT di.deputy_id, di.title
+        FROM deputies_info di
+        WHERE di.title = 'Titular'
+        ${year ? `AND di.legislature = ${year === '2019' ? 56 : 57}` : ''}
+    )
+`;
+
+const withActiveDeputiesSql = (year) => `
+    active_deputies AS (
+        SELECT DISTINCT e.deputy_id, d.party, d.state, td.title
+        FROM expenses e
+        JOIN deputies d ON e.deputy_id = d.id
+        JOIN titular_deputies td ON e.deputy_id = td.deputy_id
+        WHERE ${year ? 
+            `(
+                (e.year = ${parseInt(year)} AND e.month > 1) OR 
+                (e.year > ${parseInt(year)} AND e.year < ${parseInt(year) + 3}) OR 
+                (e.year = ${parseInt(year) + 3}) OR
+                (e.year = ${parseInt(year) + 4} AND e.month = 1)
+            )` : '1=1'}
+    )
+`;
+
+const mandateFilterSql = (year) => {
+    const mandateStartYear = parseInt(year);
+    const mandateEndYear = mandateStartYear + 3;
+
+    return `(
+        (e.year = ${mandateStartYear} AND e.month > 1) OR 
+        (e.year > ${mandateStartYear} AND e.year < ${mandateEndYear}) OR 
+        (e.year = ${mandateEndYear}) OR
+        (e.year = ${mandateEndYear + 1} AND e.month = 1)
+    )`;
+}
+
+function buildBasicConditions(year, expenseType) {
+    const conditions = [];
+    const params = [];
+
+    if (expenseType !== 'all' && expenseType) {
+        conditions.push('e.expense_type = ?');
+        params.push(expenseType);
+    }
+    if (year) {
+        conditions.push(mandateFilterSql(year));
+    }
+
+    return { conditions, params };
+}
 
 // Get all expense types
 app.get('/api/expense-types', async (req, res) => {
@@ -100,37 +151,7 @@ app.get('/api/expenses/analysis', async (req, res) => {
         }
         
         // If not in cache, fetch from database
-        const conditions = [];
-        const params = [];
-        
-        if (expenseType !== 'all' && expenseType) {
-            conditions.push('e.expense_type = ?');
-            params.push(expenseType);
-        }
-        if (year) {
-            // Filter for the entire mandate (4 years)
-            // Year parameter represents the first year of the mandate (e.g., 2019, 2023, 2027...)
-            const mandateStartYear = parseInt(year);
-            const mandateEndYear = mandateStartYear + 3;
-            
-            // Include all expenses from the mandate period:
-            // 1. From mandateStartYear (exclude January)
-            // 2. All months from years between start and end
-            // 3. All months from mandateEndYear  
-            // 4. January from the year after mandate ends
-            conditions.push(`(
-                (e.year = ? AND e.month > 1) OR 
-                (e.year > ? AND e.year < ?) OR 
-                (e.year = ?) OR
-                (e.year = ? AND e.month = 1)
-            )`);
-            
-            params.push(mandateStartYear); // startYear with month > 1
-            params.push(mandateStartYear); // startYear for > comparison
-            params.push(mandateEndYear);   // endYear for < comparison
-            params.push(mandateEndYear);   // endYear (all months)
-            params.push(mandateEndYear + 1); // Next year's January
-        }
+        const { conditions, params } = buildBasicConditions(year, expenseType);
         
         const whereClause = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
         
@@ -145,27 +166,8 @@ app.get('/api/expenses/analysis', async (req, res) => {
                 FROM expenses e
                 WHERE 1=1 ${whereClause ? whereClause.replace('WHERE ', ' AND ') : ''}
             ),
-            /* Get deputies who were "Titular" for the specified legislature */
-            titular_deputies AS (
-                SELECT DISTINCT di.deputy_id, di.title
-                FROM deputies_info di
-                WHERE di.title = 'Titular'
-                ${year ? `AND di.legislature = ${year === '2019' ? 56 : 57}` : ''}
-            ),
-            /* First, identify deputies who have ANY expenses in the selected mandate period AND are Titular */
-            active_deputies AS (
-                SELECT DISTINCT e.deputy_id, d.party, d.state, td.title
-                FROM expenses e
-                JOIN deputies d ON e.deputy_id = d.id
-                JOIN titular_deputies td ON e.deputy_id = td.deputy_id
-                WHERE ${year ? 
-                    `(
-                        (e.year = ${parseInt(year)} AND e.month > 1) OR 
-                        (e.year > ${parseInt(year)} AND e.year < ${parseInt(year) + 3}) OR 
-                        (e.year = ${parseInt(year) + 3}) OR
-                        (e.year = ${parseInt(year) + 4} AND e.month = 1)
-                    )` : '1=1'}
-            ),
+            ${withTitularDeputiesSql(year)},
+            ${withActiveDeputiesSql(year)},
             deputy_expenses AS (
                 SELECT 
                     ad.deputy_id as id,
@@ -248,69 +250,32 @@ app.get('/api/expenses/party-analysis', async (req, res) => {
         if (cachedData) {
             return res.json(JSON.parse(cachedData));
         }
-        
-        // If not in cache, fetch from database
+
+        const conditions = [];
         const params = [];
-        let expenseFilter = '';
-        
-        // Build filter conditions
+
         if (expenseType !== 'all' && expenseType) {
-            expenseFilter = 'AND e.expense_type = ?';
+            conditions.push('e.expense_type = ?');
             params.push(expenseType);
         }
 
-        // Year filter will be applied directly in the SQL
-        const yearParam = year || null;
-        let yearCondition = '';
-        
-        if (yearParam) {
-            // Filter for the entire mandate (4 years)
-            const mandateStartYear = parseInt(yearParam);
-            const mandateEndYear = mandateStartYear + 3;
-            
-            yearCondition = `AND (
-                (e.year = ? AND e.month > 1) OR 
-                (e.year > ? AND e.year < ?) OR 
-                (e.year = ?) OR
-                (e.year = ? AND e.month = 1)
-            )`;
-            
-            params.push(mandateStartYear); // startYear with month > 1
-            params.push(mandateStartYear); // startYear for > comparison
-            params.push(mandateEndYear);   // endYear for < comparison
-            params.push(mandateEndYear);   // endYear (all months)
-            params.push(mandateEndYear + 1); // Next year's January
-        }
-        
         // Create the query with cleaner structure
         const query = `
-            WITH titular_deputies AS (
-                -- Get deputies who were "Titular" for the specified legislature
-                SELECT DISTINCT di.deputy_id
-                FROM deputies_info di
-                WHERE 1=1
-                ${yearParam ? `AND di.legislature = ${yearParam === '2019' ? 56 : 57}` : ''}
-            ),
-            active_deputies AS (
-                -- Get active deputies for the selected mandate with their party who are Titular
-                SELECT DISTINCT e.deputy_id, d.party
-                FROM expenses e
-                JOIN deputies d ON e.deputy_id = d.id
-                JOIN titular_deputies td ON e.deputy_id = td.deputy_id
-                WHERE d.party IS NOT NULL
-                ${yearCondition}
-            ),
+            WITH 
+            ${withTitularDeputiesSql(year)},
+            ${withActiveDeputiesSql(year)},
             filtered_expenses AS (
                 -- Get relevant expenses based on filters
                 SELECT 
                     e.deputy_id,
+                    d.party,
                     SUM(e.net_value) as expense_sum
                 FROM expenses e
+                JOIN deputies d ON e.deputy_id = d.id
                 JOIN active_deputies ad ON e.deputy_id = ad.deputy_id
-                WHERE 1=1
-                ${expenseFilter}
-                ${yearCondition}
-                GROUP BY e.deputy_id
+                WHERE 1=1 AND ${mandateFilterSql(year)}
+                    ${conditions.length > 0 ? 'AND ' + conditions.join(' AND ') : ''}
+                GROUP BY e.deputy_id, d.party
             ),
             party_totals AS (
                 -- Calculate party-level aggregates
@@ -374,57 +339,19 @@ app.get('/api/expenses/state-analysis', async (req, res) => {
             return res.json(JSON.parse(cachedData));
         }
         
-        // If not in cache, fetch from database
+        const conditions = [];
         const params = [];
-        let expenseFilter = '';
-        
-        // Build filter conditions
+
         if (expenseType !== 'all' && expenseType) {
-            expenseFilter = 'AND e.expense_type = ?';
+            conditions.push('e.expense_type = ?');
             params.push(expenseType);
         }
 
-        // Year filter will be applied directly in the SQL
-        const yearParam = year || null;
-        let yearCondition = '';
-        
-        if (yearParam) {
-            // Filter for the entire mandate (4 years)
-            const mandateStartYear = parseInt(yearParam);
-            const mandateEndYear = mandateStartYear + 3;
-            
-            yearCondition = `AND (
-                (e.year = ? AND e.month > 1) OR 
-                (e.year > ? AND e.year < ?) OR 
-                (e.year = ?) OR
-                (e.year = ? AND e.month = 1)
-            )`;
-            
-            params.push(mandateStartYear); // startYear with month > 1
-            params.push(mandateStartYear); // startYear for > comparison
-            params.push(mandateEndYear);   // endYear for < comparison
-            params.push(mandateEndYear);   // endYear (all months)
-            params.push(mandateEndYear + 1); // Next year's January
-        }
-        
         // Create the query with cleaner structure
         const query = `
-            WITH titular_deputies AS (
-                -- Get deputies who were "Titular" for the specified legislature
-                SELECT DISTINCT di.deputy_id
-                FROM deputies_info di
-                WHERE 1=1
-                ${yearParam ? `AND di.legislature = ${yearParam === '2019' ? 56 : 57}` : ''}
-            ),
-            active_deputies AS (
-                -- Get active deputies for the selected mandate with their state who are Titular
-                SELECT DISTINCT e.deputy_id, d.state
-                FROM expenses e
-                JOIN deputies d ON e.deputy_id = d.id
-                JOIN titular_deputies td ON e.deputy_id = td.deputy_id
-                WHERE d.state IS NOT NULL
-                ${yearCondition}
-            ),
+            WITH 
+            ${withTitularDeputiesSql(year)},
+            ${withActiveDeputiesSql(year)},
             filtered_expenses AS (
                 -- Get relevant expenses based on filters
                 SELECT 
@@ -432,9 +359,8 @@ app.get('/api/expenses/state-analysis', async (req, res) => {
                     SUM(e.net_value) as expense_sum
                 FROM expenses e
                 JOIN active_deputies ad ON e.deputy_id = ad.deputy_id
-                WHERE 1=1
-                ${expenseFilter}
-                ${yearCondition}
+                WHERE 1=1 AND ${mandateFilterSql(year)}
+                    ${conditions.length > 0 ? 'AND ' + conditions.join(' AND ') : ''}
                 GROUP BY e.deputy_id
             ),
             state_totals AS (
